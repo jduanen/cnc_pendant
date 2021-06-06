@@ -1,7 +1,8 @@
 # cnc_pendant
 Connect an XHC WHB04B pendant to a GRBL-based CNC controller
 
-**Notes
+**Notes**
+
 - Reset
   * Pendant comes out of power-up in RESET mode
     - it remembers the last coordinate line values it was given and displays "RESET"
@@ -21,7 +22,6 @@ Connect an XHC WHB04B pendant to a GRBL-based CNC controller
   * sometimes emits a null data packet -- i.e., all zeros (key1, key2, incr, axis, jog)
     - sometimes first thing after powerup is a null packet
     - pendant looks like it continues emitting packets until it is reset
-
 - Display
   * pendant automatically displays the value of the axis knob with an asterix next to a coordinate line
     - host is not able to set the selection marker
@@ -44,7 +44,6 @@ Connect an XHC WHB04B pendant to a GRBL-based CNC controller
     - X, Y, Z or A, B, C coordinates if in Machine coordinate system
     - X1, Y1, Z1 or A1, B1, C1 coordinates if in Work coordinate system
   * the currently selected coordinate (i.e., the one where motion will occur) is (automatically) indicated on the display with an asterix
-
 - Input
   * this object emits the (lightly parsed) basic events from the pendent
     - puts them into an internal queue, provide method to pull from this input queue
@@ -80,10 +79,7 @@ Connect an XHC WHB04B pendant to a GRBL-based CNC controller
   * reports current axis and incr knob settings
     - axis: 0x06="off"
     - incr: 0x0e=0.001/2%, 0x0d=0.02/5% ...
-
-* N.B.
-  - always have to click motion mode button after power-on of pendant
-    * i.e., either "Continuous" or "Step"
-  - need to interogate the Controller to get the current values for the Coordinate
-* the -4 pendant only has four values (0x11-0x14), other two values for the -6
-* this application should interpret the final three positions of the incr knob as: 10, 50, 100?
+- always have to click motion mode button after power-on of pendant (i.e., either "Continuous" or "Step")
+- need to interogate the Controller to get the current values for the Coordinate
+- the -4 pendant only has four values (0x11-0x14), other two values for the -6
+- this application should interpret the final three positions of the incr knob as: 10, 50, 100?
