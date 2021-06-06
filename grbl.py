@@ -33,11 +33,12 @@ GRBL Build Options:
     
 
 from collections import namedtuple
+from parse import parse
 
 
-VERSION = "1.0cJDN-2"   #### FIXME, update to 1.1h JDN (with Build Option codes)
+GRBL_VERSION = "1.0cJDN-2"   #### FIXME, update to 1.1h JDN (with Build Option codes)
 
-PROMPT = f"Grbl {GRBL_VERSION} ['$' for help]"
+GRBL_PROMPT = f"Grbl {GRBL_VERSION} ['$' for help]"
 
 RX_BUFFER_SIZE = 128
 
@@ -67,7 +68,7 @@ GCODES = {
 ALL_GCODES = [item for sublist in GCODES.values() for item in sublist]
 
 ALARM_CODES = [
-    (,),
+    None,
     ("Hard limit",
      "Hard limit has been triggered. Machine position is likely lost due to sudden halt. Re-homing is highly recommended."),
     ("Soft limit",
@@ -91,7 +92,7 @@ ALARM_CODES = [
 ]
 
 ERROR_CODES = [
-  (,),
+  None,
   ("Expected command letter",
    "G-code words consist of a letter and a value. Letter was not found."),
   ("Bad number format",
@@ -165,7 +166,6 @@ ERROR_CODES = [
   ("Invalid gcode ID:38",
    "Tool number greater than max supported value."),
 ]
-
 
 Setting = namedtuple("Setting", "default name units description")
 #### FIXME fix the default values
@@ -307,7 +307,52 @@ SETTINGS = {
                  "millimeters",
                  "Maximum Z-axis travel distance from homing switch. Determines valid machine space for soft-limits and homing search distances.")
 }
-    
+
+REALTIME_COMMANDS = {
+    CYCLE_START: 0x7e     # cycle start ('~')
+    FEED_HOLD: 0x21       # feed hold ('!')
+    CURRENT_STATUS: 0x3f  # current status ('?')
+    RESET_GRBL: 0x18      # reset GRBL (Ctrl-X)
+    SAFETY_DOOR: 0x84     # SW equivalent of door switch
+    JOG_CANCEL: 0x85      # cancels current jog state by Feed Hold and flushes jog commands in buffer
+    FEED_100: 0x90        # set feed rate to 100% of programmed rate
+    FEED_INCR_10: 0x91    # increase feed rate by 10% of programmed rate
+    FEED_DECR_10: 0x92    # decrease feed rate by 10% of programmed rate
+    FEED_INCR_1: 0x93     # increase feed rate by 1% of programmed rate
+    FEED_DECR_1: 0x94     # decrease feed rate by 1% of programmed rate
+    RAPID_100: 0x95       # set rapid rate to full 100% rapid rate
+    RAPID_50: 0x96        # set rapid rate to 50% of rapid rate
+    RAPID_25: 0x97        # set rapid rate to 25% of rapid rate
+    TOGGLE_SPINDLE = 0x9e # toggle spindle enable/disable -- only in HOLD state
+    TOGGLE_FLOOD = 0xa0   # toggle flood coolant state
+    TOGGLE_MIST = 0xa1    # toggle mist coolant state
+}
+
+
+def alarmDescription(msg, full=True):
+    """Take a raw Alarm message from the controller and return its description.
+    """
+    description = None
+    res = parse("ALARM:{num}", msg)
+    if res:
+        try:
+            description = ALARM_CODES[int(res['num'])][1 if full else 0]
+        except IndexError:
+            pass
+    return description
+
+def errorDescription(msg, full=True):
+    """Take a raw Error message from the controller and return its description.
+    """
+    description = None
+    res = parse("error:{num}", msg)
+    if res:
+        try:
+            description = ERROR_CODES[int(res['num'])][1 if full else 0]
+        except IndexError:
+            pass
+    return description
+
 
 class CommandGroups():
     NON_MODAL_CMDS = 0
@@ -342,23 +387,16 @@ class DollarCommands():
 DOLLAR_COMMANDS = [v for v in dir(DollarCommands) if not v.startswith('__')]
 
 
-class RealtimeCommands():
-    CYCLE_START = '~'     # cycle start
-    FEED_HOLD = '!'       # feed hold
-    CURRENT_STATUS = '?'  # current status
-    RESET_GRBL = '\u0003' # reset GRBL (Ctrl-X)
-    SAFETY_DOOR = 0x84    # SW equivalent of door switch
-    JOG_CANCEL = 0x85     # cancels current jog state by Feed Hold and flushes jog commands in buffer
-    FEED_100 = 0x90       # set feed rate to 100% of programmed rate
-    FEED_INCR_10 = 0x91   # increase feed rate by 10% of programmed rate
-    FEED_DECR_10 = 0x92   # decrease feed rate by 10% of programmed rate
-    FEED_INCR_1 = 0x93    # increase feed rate by 1% of programmed rate
-    FEED_DECR_1 = 0x94    # decrease feed rate by 1% of programmed rate
-    RAPID_100 = 0x95      # set rapid rate to full 100% rapid rate
-    RAPID_50 = 0x96       # set rapid rate to 50% of rapid rate
-    RAPID_25 = 0x97       # set rapid rate to 25% of rapid rate
-    TOGGLE_SPINDLE = 0x9e # toggle spindle enable/disable -- only in HOLD state
-    TOGGLE_FLOOD = 0xa0   # toggle flood coolant state
-    TOGGLE_MIST = 0xa1    # toggle mist coolant state
-
-REALTIME_COMMANDS = [v for v in dir(RealtimeCommands) if not v.startswith('__')]
+#
+# TEST
+#
+if __name__ == '__main__':
+    #### FIXME add real tests
+    alarmMsg = "ALARM:5"
+    print(alarmDescription(alarmMsg))
+    print(alarmDescription(alarmMsg, False))
+    print(alarmDescription("ALAR:9"))
+    errorMsg = "error:13"
+    print(errorDescription(errorMsg))
+    print(errorDescription(errorMsg, False))
+    print(errorDescription("eror:3"))
