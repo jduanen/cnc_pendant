@@ -190,15 +190,9 @@ class Pendant(Receiver):
         if self.device.manufacturer != 'KTURT.LTD':
             raise Exception(f"Invalid pendent receiver device: {self.device.manufacturer}")
         super().__init__(name="Pendant")
-        self.reset()
+        self._reset()
 
-    def flushInput(self):
-        inp = self._rawInputPacket()
-        while inp and inp != Pendant.NULL_INPUT_PACKET:
-            inp = self._rawInputPacket()
-        logging.debug("Input flushed")
-
-    def reset(self):
+    def _reset(self):
         """Issue command to bring pendant out of reset
 
          Set the RESET flag (leave other flags 0), then wait for motion mode
@@ -214,6 +208,12 @@ class Pendant(Receiver):
                 break
         self.sendOutput(Pendant._makeDisplayCommand(motionMode=Pendant.MODE_MAP[inputVals['key1']]))
         logging.info("Reset receiver")
+
+    def _flushInput(self):
+        inp = self._rawInputPacket()
+        while inp and inp != Pendant.NULL_INPUT_PACKET:
+            inp = self._rawInputPacket()
+        logging.debug("Input flushed")
 
     def _rawInputPacket(self, timeout=1000):
         """Read the RF receiver device and return raw input packet.
