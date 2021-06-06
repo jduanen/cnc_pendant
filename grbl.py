@@ -1,7 +1,7 @@
 '''
 Library containing definitions relevent to GRBL-based controllers
 
-Build Options:
+GRBL Build Options:
 (default enabled)
   * V: Variable Spindle -- No, don't have on my X-Carve
   * M: Mist Collant (M7) -- Yes, I'll use as vacuum control
@@ -12,7 +12,7 @@ Build Options:
   * T: Two limit sitches on axis -- No, don't have on my X-Carve
   * A: Allow feed rate overrides in probe cycles -- Yes
   * D: Use spindle direction as enable pin -- ?
-  * 0: Spindel enable off when speed is zero -- ?
+  * 0: Spindle enable off when speed is zero -- ?
   * S: Software limit pin debouncing -- ?
   * R: Parking override control -- ?
   * +: Safety door input pin -- No, don't have on my X-Carve
@@ -26,9 +26,15 @@ Build Options:
   * L: Homing initialization auto-lock -- ?
 '''
 
+#### TODO save current parameters from my grbl controller
+#### TODO recompile grbl v1.1h and configure for my system
+#### TODO recalibrate all three axes
+#### TODO fix Y axis limit switch -- order spares
+    
+
 from collections import namedtuple
 
-    
+
 VERSION = "1.0cJDN-2"   #### FIXME, update to 1.1h JDN (with Build Option codes)
 
 PROMPT = f"Grbl {GRBL_VERSION} ['$' for help]"
@@ -57,6 +63,8 @@ GCODES = {
     'NON_CMD_WORDS': ["F", "I", "J", "K", "L", "N", "P", "R", "S", "T", "X",
                       "Y", "Z"]
 }
+
+ALL_GCODES = [item for sublist in GCODES.values() for item in sublist]
 
 ALARM_CODES = [
     (,),
@@ -160,107 +168,142 @@ ERROR_CODES = [
 
 
 Setting = namedtuple("Setting", "default name units description")
+#### FIXME fix the default values
 SETTINGS = {
-    0: Setting("Step pulse time",
+    0: Setting(0,
+               "Step pulse time",
                "microseconds",
                "Sets time length per step. Minimum 3usec."),
-    1: Setting("Step idle delay",
+    1: Setting(0,
+               "Step idle delay",
                "milliseconds",
                "Sets a short hold delay when stopping to let dynamics settle before disabling steppers. Value 255 keeps motors enabled with no delay."),
-    2: Setting("Step pulse invert",
+    2: Setting(0,
+               "Step pulse invert",
                "mask",
                "Inverts the step signal. Set axis bit to invert (00000ZYX)."),
-    3: Setting("Step direction invert",
+    3: Setting(0,
+               "Step direction invert",
                "mask",
                "Inverts the direction signal. Set axis bit to invert (00000ZYX)."),
-    4: Setting("Invert step enable pin",
+    4: Setting(0,
+               "Invert step enable pin",
                "boolean",
                "Inverts the stepper driver enable pin signal."),
-    5: Setting("Invert limit pins",
+    5: Setting(0,
+               "Invert limit pins",
                "boolean",
                "Inverts the all of the limit input pins."),
-    6: Setting("Invert probe pin",
+    6: Setting(0,
+               "Invert probe pin",
                "boolean",
                "Inverts the probe input pin signal."),
-    10: Setting("Status report options",
+    10: Setting(0,
+                "Status report options",
                 "mask",
                 "Alters data included in status reports."),
-    11: Setting("Junction deviation",
+    11: Setting(0,
+                "Junction deviation",
                 "millimeters",
                 "Sets how fast Grbl travels through consecutive motions. Lower value slows it down."),
-    12: Setting("Arc tolerance",
+    12: Setting(0,
+                "Arc tolerance",
                 "millimeters",
                 "Sets the G2 and G3 arc tracing accuracy based on radial error. Beware: A very small value may effect performance."),
-    13: Setting("Report in inches",
+    13: Setting(0,
+                "Report in inches",
                 "boolean",
                 "Enables inch units when returning any position and rate value that is not a settings value."),
-    20: Setting("Soft limits enable",
+    20: Setting(0,
+                "Soft limits enable",
                 "boolean",
                 "Enables soft limits checks within machine travel and sets alarm when exceeded. Requires homing."),
-    21: Setting("Hard limits enable",
+    21: Setting(0,
+                "Hard limits enable",
                 "boolean",
                 "Enables hard limits. Immediately halts motion and throws an alarm when switch is triggered."),
-    22: Setting("Homing cycle enable",
+    22: Setting(0,
+                "Homing cycle enable",
                 "boolean",
                 "Enables homing cycle. Requires limit switches on all axes."),
-    23: Setting("Homing direction invert",
+    23: Setting(0,
+                "Homing direction invert",
                 "mask",
                 "Homing searches for a switch in the positive direction. Set axis bit (00000ZYX) to search in negative direction."),
-    24: Setting("Homing locate feed rate",
+    24: Setting(0,
+                "Homing locate feed rate",
                 "mm/min",
                 "Feed rate to slowly engage limit switch to determine its location accurately."),
-    25: Setting("Homing search seek rate",
+    25: Setting(0,
+                "Homing search seek rate",
                 "mm/min",
                 "Seek rate to quickly find the limit switch before the slower locating phase."),
-    26: Setting("Homing switch debounce delay",
+    26: Setting(0,
+                "Homing switch debounce delay",
                 "milliseconds",
                 "Sets a short delay between phases of homing cycle to let a switch debounce."),
-    27: Setting("Homing switch pull-off distance",
+    27: Setting(0,
+                "Homing switch pull-off distance",
                 "millimeters",
                 "Retract distance after triggering switch to disengage it. Homing will fail if switch isn't cleared."),
-    30: Setting("Maximum spindle speed",
+    30: Setting(0,
+                "Maximum spindle speed",
                 "RPM",
                 "Maximum spindle speed. Sets PWM to 100% duty cycle."),
-    31: Setting("Minimum spindle speed",
+    31: Setting(0,
+                "Minimum spindle speed",
                 "RPM",
                 "Minimum spindle speed. Sets PWM to 0.4% or lowest duty cycle."),
-    32: Setting("Laser-mode enable",
+    32: Setting(0,
+                "Laser-mode enable",
                 "boolean",
                 "Enables laser mode. Consecutive G1/2/3 commands will not halt when spindle speed is changed."),
-    100: Setting("X-axis travel resolution",
+    100: Setting(0,
+                 "X-axis travel resolution",
                  "step/mm",
                  "X-axis travel resolution in steps per millimeter."),
-    101: Setting("Y-axis travel resolution",
+    101: Setting(0,
+                 "Y-axis travel resolution",
                  "step/mm",
                  "Y-axis travel resolution in steps per millimeter."),
-    102: Setting("Z-axis travel resolution",
+    102: Setting(0,
+                 "Z-axis travel resolution",
                  "step/mm",
                  "Z-axis travel resolution in steps per millimeter."),
-    110: Setting("X-axis maximum rate",
+    110: Setting(0,
+                 "X-axis maximum rate",
                  "mm/min",
                  "X-axis maximum rate. Used as G0 rapid rate."),
-    111: Setting("Y-axis maximum rate",
+    111: Setting(0,
+                 "Y-axis maximum rate",
                  "mm/min",
                  "Y-axis maximum rate. Used as G0 rapid rate."),
-    112: Setting("Z-axis maximum rate",
+    112: Setting(0,
+                 "Z-axis maximum rate",
                  "mm/min",
                  "Z-axis maximum rate. Used as G0 rapid rate."),
-    120: Setting("X-axis acceleration",
+    120: Setting(0,
+                 "X-axis acceleration",
                  "mm/sec^2",
                  "X-axis acceleration. Used for motion planning to not exceed motor torque and lose steps."),
-    121: Setting("Y-axis acceleration",
+    121: Setting(0,
+                 "Y-axis acceleration",
                  "mm/sec^2",
                  "Y-axis acceleration. Used for motion planning to not exceed motor torque and lose steps."),
-    122: Setting("Z-axis acceleration",
+    122: Setting(0,
+                 "Z-axis acceleration",
                  "mm/sec^2",
                  "Z-axis acceleration. Used for motion planning to not exceed motor torque and lose steps."),
-    130: Setting("X-axis maximum travel",
+    130: Setting(0,
+                 "X-axis maximum travel",
                  "millimeters",
                  "Maximum X-axis travel distance from homing switch. Determines valid machine space for soft-limits and homing search distances."),
-    131: Setting("Y-axis maximum travel",
+    131: Setting(0,
+                 "Y-axis maximum travel",
                  "millimeters",
                  "Maximum Y-axis travel distance from homing switch. Determines valid machine space for soft-limits and homing search distances."),
-    132: Setting("Z-axis maximum travel",
+    132: Setting(0,
+                 "Z-axis maximum travel",
                  "millimeters",
                  "Maximum Z-axis travel distance from homing switch. Determines valid machine space for soft-limits and homing search distances.")
 }
@@ -283,6 +326,8 @@ class CommandGroups():
     SPINDLE_CONTROL = 13
     NON_CMD_WORDS = 14
 
+COMMAND_GROUPS = [v for v in dir(CommandGroups) if not v.startswith('__')]
+
 
 class DollarCommands():
     VIEW_SETTINGS = '$'     # view Grbl settings
@@ -294,12 +339,26 @@ class DollarCommands():
     KILL_ALARM = 'X'        # kill alarm lock
     RUN_HOMING = 'H'        # run homing cycle
 
+DOLLAR_COMMANDS = [v for v in dir(DollarCommands) if not v.startswith('__')]
+
 
 class RealtimeCommands():
-    CYCLE_START = '~'       # cycle start
-    FEED_HOLD = '!'         # feed hold
-    CURRENT_STATUS = '?'    # current status
-    RESET_GRBL = '\u0003'   # reset GRBL (Ctrl-X)
+    CYCLE_START = '~'     # cycle start
+    FEED_HOLD = '!'       # feed hold
+    CURRENT_STATUS = '?'  # current status
+    RESET_GRBL = '\u0003' # reset GRBL (Ctrl-X)
+    SAFETY_DOOR = 0x84    # SW equivalent of door switch
+    JOG_CANCEL = 0x85     # cancels current jog state by Feed Hold and flushes jog commands in buffer
+    FEED_100 = 0x90       # set feed rate to 100% of programmed rate
+    FEED_INCR_10 = 0x91   # increase feed rate by 10% of programmed rate
+    FEED_DECR_10 = 0x92   # decrease feed rate by 10% of programmed rate
+    FEED_INCR_1 = 0x93    # increase feed rate by 1% of programmed rate
+    FEED_DECR_1 = 0x94    # decrease feed rate by 1% of programmed rate
+    RAPID_100 = 0x95      # set rapid rate to full 100% rapid rate
+    RAPID_50 = 0x96       # set rapid rate to 50% of rapid rate
+    RAPID_25 = 0x97       # set rapid rate to 25% of rapid rate
+    TOGGLE_SPINDLE = 0x9e # toggle spindle enable/disable -- only in HOLD state
+    TOGGLE_FLOOD = 0xa0   # toggle flood coolant state
+    TOGGLE_MIST = 0xa1    # toggle mist coolant state
 
-
-
+REALTIME_COMMANDS = [v for v in dir(RealtimeCommands) if not v.startswith('__')]
