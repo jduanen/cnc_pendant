@@ -309,23 +309,34 @@ SETTINGS = {
 }
 
 REALTIME_COMMANDS = {
-    CYCLE_START: 0x7e     # cycle start ('~')
-    FEED_HOLD: 0x21       # feed hold ('!')
-    CURRENT_STATUS: 0x3f  # current status ('?')
-    RESET_GRBL: 0x18      # reset GRBL (Ctrl-X)
-    SAFETY_DOOR: 0x84     # SW equivalent of door switch
-    JOG_CANCEL: 0x85      # cancels current jog state by Feed Hold and flushes jog commands in buffer
-    FEED_100: 0x90        # set feed rate to 100% of programmed rate
-    FEED_INCR_10: 0x91    # increase feed rate by 10% of programmed rate
-    FEED_DECR_10: 0x92    # decrease feed rate by 10% of programmed rate
-    FEED_INCR_1: 0x93     # increase feed rate by 1% of programmed rate
-    FEED_DECR_1: 0x94     # decrease feed rate by 1% of programmed rate
-    RAPID_100: 0x95       # set rapid rate to full 100% rapid rate
-    RAPID_50: 0x96        # set rapid rate to 50% of rapid rate
-    RAPID_25: 0x97        # set rapid rate to 25% of rapid rate
-    TOGGLE_SPINDLE = 0x9e # toggle spindle enable/disable -- only in HOLD state
-    TOGGLE_FLOOD = 0xa0   # toggle flood coolant state
-    TOGGLE_MIST = 0xa1    # toggle mist coolant state
+    'CYCLE_START': 0x7e,    # cycle start ('~')
+    'FEED_HOLD': 0x21,      # feed hold ('!')
+    'CURRENT_STATUS': 0x3f, # current status ('?')
+    'RESET_GRBL': 0x18,     # reset GRBL (Ctrl-X)
+    'SAFETY_DOOR': 0x84,    # SW equivalent of door switch
+    'JOG_CANCEL': 0x85,     # cancels current jog state by Feed Hold and flushes jog commands in buffer
+    'FEED_100': 0x90,       # set feed rate to 100% of programmed rate
+    'FEED_INCR_10': 0x91,   # increase feed rate by 10% of programmed rate
+    'FEED_DECR_10': 0x92,   # decrease feed rate by 10% of programmed rate
+    'FEED_INCR_1': 0x93,    # increase feed rate by 1% of programmed rate
+    'FEED_DECR_1': 0x94,    # decrease feed rate by 1% of programmed rate
+    'RAPID_100': 0x95,      # set rapid rate to full 100% rapid rate
+    'RAPID_50': 0x96,       # set rapid rate to 50% of rapid rate
+    'RAPID_25': 0x97,       # set rapid rate to 25% of rapid rate
+    'TOGGLE_SPINDLE': 0x9e, # toggle spindle enable/disable -- only in HOLD state
+    'TOGGLE_FLOOD': 0xa0,   # toggle flood coolant state
+    'TOGGLE_MIST': 0xa1     # toggle mist coolant state
+}
+
+DOLLAR_COMMANDS = {
+    'VIEW_SETTINGS': '$',   # view Grbl settings
+    'VIEW_PARAMETERS': '#', # view '#' parameters
+    'VIEW_PARSER': 'G',     # view parser state
+    'VIEW_BUILD': 'I',      # view build info
+    'VIEW_STARTUPS': 'N',   # view startup blocks
+    'GCODE_MODE': 'C',      # check gcode mode
+    'KILL_ALARM': 'X',      # kill alarm lock
+    'RUN_HOMING': 'H'       # run homing cycle
 }
 
 
@@ -371,20 +382,7 @@ class CommandGroups():
     SPINDLE_CONTROL = 13
     NON_CMD_WORDS = 14
 
-COMMAND_GROUPS = [v for v in dir(CommandGroups) if not v.startswith('__')]
-
-
-class DollarCommands():
-    VIEW_SETTINGS = '$'     # view Grbl settings
-    VIEW_PARAMETERS = '#'   # view '#' parameters
-    VIEW_PARSER = 'G'       # view parser state
-    VIEW_BUILD = 'I'        # view build info
-    VIEW_STARTUPS = 'N'     # view startup blocks
-    GCODE_MODE = 'C'        # check gcode mode
-    KILL_ALARM = 'X'        # kill alarm lock
-    RUN_HOMING = 'H'        # run homing cycle
-
-DOLLAR_COMMANDS = [v for v in dir(DollarCommands) if not v.startswith('__')]
+COMMAND_GROUP_NAMES = [v for v in dir(CommandGroups) if not v.startswith('__')]
 
 
 #
