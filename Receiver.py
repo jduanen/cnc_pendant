@@ -3,12 +3,6 @@ Base class that provides a thread for receiving from a (USB or serial) link and
  queuing inputs up for later consumption.
 '''
 
-#### FIXME replace running flags with thread events
-####    self.running = threading.Event()
-####    while not self.running.is_set():
-####    self.running.set()
-
-
 import logging
 import queue
 import threading
@@ -18,20 +12,23 @@ class Receiver():
     def __init__(self, name=None):
         self.inputQ = queue.Queue()
 
-        self.receiving = False
+        self.receiving = threading.Event()
+        self.receiving.clear()
         self.closed = False
 
 #        threading.Thread.__init__(self, name=name)
         self.receiverThread = threading.Thread(target=self.receiver, name=name)
 
     def __enter__(self):
+        #### FIXME
         print("ENTER")
 
     def __exit__(self, type, value, tb):
+        #### FIXME
         self.shutdown()
 
     def start(self):
-        self.receiving = True
+        self.receiving.set()
         self.receiverThread.start()
         logging.debug(f"Starting thread: {self.receiverThread.name}")
 
@@ -42,7 +39,7 @@ class Receiver():
         """
         if self.closed:
             logging.debug("Shutdown: already closed")
-        self.receiving = False
+        self.receiving.clear()
         if blocking:
             self.waitForShutdown()
 
@@ -61,7 +58,7 @@ class Receiver():
           Puts a final None value on the inputQ and indicates that its the input
            thread is done.
         """
-        while self.receiving:
+        while self.receiving.isSet():
             inputs = self._receive()
             if any(inputs.values()):
                 try: 
@@ -69,7 +66,7 @@ class Receiver():
                     self.inputQ.put_nowait(inputs)
                 except Exception as ex:
                     logging.error(f"Input queue full, discarding input and shutting down: {ex}")
-                    self.receiving = False
+                    self.receiving.clear()
         self.inputQ.put(None)
         self.closed = True
 
