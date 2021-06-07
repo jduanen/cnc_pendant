@@ -203,7 +203,7 @@ class Pendant(Receiver):
         """
         self.sendOutput(Pendant._makeDisplayCommand(reset=1))
         while True:
-            inputVals = self._receive()
+            inputVals = self._receive()['data']
             if inputVals and inputVals['key2'] == 0x00 and inputVals['key1'] in Pendant.MODE_MAP.keys():
                 break
         self.sendOutput(Pendant._makeDisplayCommand(motionMode=Pendant.MODE_MAP[inputVals['key1']]))
@@ -240,12 +240,13 @@ class Pendant(Receiver):
         inputPacket = self._rawInputPacket()
         if inputPacket:
             if len(inputPacket) == 8:
-                inputs = dict(zip(INPUT_FIELDS, struct.unpack("BBBBBBbB", inputPacket)))
-                assert inputs['hdr'] == 0x04, f"Invalid input packet header {inputs['hdr']}"
+                ins = dict(zip(INPUT_FIELDS, struct.unpack("BBBBBBbB", inputPacket)))
+                assert ins['hdr'] == 0x04, f"Invalid input packet header {ins['hdr']}"
                 #### TODO figure out how their checksum works and validate input packets
             else:
                 if len(inputPacket) != 0:
                     logging.warning(f"Invalid packet: {[hex(x) for x in inputPacket] if inputPacket else 'None'}")
+            inputs['data'] = ins
         return inputs
 
     def sendOutput(self, data):
@@ -265,16 +266,15 @@ class Pendant(Receiver):
 # TEST
 #
 if __name__ == '__main__':
+    #### FIXME add real tests
     print("Start")
     p = Pendant()
-    print("A")
     p.start()
-    print("B")
-    inp = True
-    while inp:
-        print("C")
-        inp = p.getInput()
-        print("INPUT: ", inp)
+    while True:
+        ins = p.getInput()['data']
+        print("Input:", ins)
+        if ins['key1'] == 2 and ins['key2'] == 0:
+            break
     p.shutdown()
     print("Done")
 
