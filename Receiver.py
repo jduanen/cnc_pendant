@@ -60,7 +60,7 @@ class Receiver():
         """
         while self.receiving.isSet():
             inputs = self._receive()
-            if any(inputs.values()):
+            if inputs and 'data' in inputs and inputs['data']:
                 try: 
                     logging.debug(f"Inputs: {inputs}")
                     self.inputQ.put_nowait(inputs)
