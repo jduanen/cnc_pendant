@@ -1,7 +1,42 @@
 # cnc_pendant
 Connect an XHC WHB04B pendant to a GRBL-based CNC controller
 
+**TODO**
+* Clean this up and add some text about how all this is supposed to work
+* Document the code
+* Add tests
+* Provide pictures and documentation for the HW
+
 **Notes**
+
+- Button Interpretation:
+  * Reset: issue a soft reset to the Controller 
+    - using '^X' realtime command
+  * Stop: stop everything and leave it in position
+    - using '!' realtime command
+  * Start/Pause: toggle between cycle start and resume
+    - using '~' realtime command
+  * Feed+/-: adjust feed rate while program is running
+  * Spindle+/-: adjust spindle speed while program is running
+  * M-Home: stop and home all three axes in machine coordinate space
+    - set to machine coordinate space
+  * Safe-Z: retract spindle to top of Z axis travel (home Z axis only)
+  * W-Home: stop and home all three axes in workpiece coordinate space
+  * S-on/off: toggle spindle on/off
+  * Probe-Z: run probing cycle
+  * Continuous: set into continuous movement mode
+    - selected axis will move in direction of jog wheel movement (i.e., cw or ccw)
+    - movement will stop whenever wheel movement stops
+    - movement is done at the rate given by the increment knob setting
+      * i.e., a percentage of max movement rate
+    - movement is independent of speed at which the jog wheel is rotated
+  * Step: set into step movement mode
+    - selected axis will move in direction of jog wheel movement
+    - movement is in increments given by the increment knob setting
+  * Macro-[1-11]: defined by yaml in button config file
+
+- Adding more increments to the incr knob in step mode: 10.0, 50.0, 100.0
+  * ignoring/not implementing the 'Lead' setting
 
 - Reset
   * Pendant comes out of power-up in RESET mode
@@ -83,3 +118,8 @@ Connect an XHC WHB04B pendant to a GRBL-based CNC controller
 - need to interogate the Controller to get the current values for the Coordinate
 - the -4 pendant only has four values (0x11-0x14), other two values for the -6
 - this application should interpret the final three positions of the incr knob as: 10, 50, 100?
+- starting up this program will force the pendant into RESET state
+  * will have to select motion mode in order to get out of reset
+- the input from the pendant and the pendant's display are logically independent
+  * it may take some time for the controller to receive inputs from the pendant and send back results that then are sent to the pendant's display
+  * everything should converge to a consistent state quickly
