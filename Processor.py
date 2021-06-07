@@ -23,6 +23,7 @@ MAX_SPEED = 1000  #### FIXME
 assert JOG_SPEED <= MAX_SPEED
 
 
+#### TODO consider replacing Running flags with Event objects
 class Processor():
     def __init__(self, pendant, controller, host, macros={}):
         assert isinstance(pendant, Pendant), f"pendant is not an instance of Pendant: {type(pendant)}"
