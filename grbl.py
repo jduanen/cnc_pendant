@@ -329,14 +329,14 @@ REALTIME_COMMANDS = {
 }
 
 DOLLAR_COMMANDS = {
-    'VIEW_SETTINGS': '$',   # view Grbl settings
-    'VIEW_PARAMETERS': '#', # view '#' parameters
-    'VIEW_PARSER': 'G',     # view parser state
-    'VIEW_BUILD': 'I',      # view build info
-    'VIEW_STARTUPS': 'N',   # view startup blocks
-    'GCODE_MODE': 'C',      # check gcode mode
-    'KILL_ALARM': 'X',      # kill alarm lock
-    'RUN_HOMING': 'H'       # run homing cycle
+    'VIEW_SETTINGS': ord('$'),   # view Grbl settings
+    'VIEW_PARAMETERS': ord('#'), # view '#' parameters
+    'VIEW_PARSER': ord('G'),     # view parser state
+    'VIEW_BUILD': ord('I'),      # view build info
+    'VIEW_STARTUPS': ord('N'),   # view startup blocks
+    'GCODE_MODE': ord('C'),      # check gcode mode
+    'KILL_ALARM': ord('X'),      # kill alarm lock
+    'RUN_HOMING': ord('H')       # run homing cycle
 }
 
 
