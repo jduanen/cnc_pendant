@@ -10,10 +10,15 @@ Notes:
   * Cycle Start, Feed Hold, and Reset realtime commands have corresponding HW buttons
 '''
 
-import logging
+#### TODO implement buffer-aware streaming interface and separate realtime interface
 
+import logging
+from queue import Queue
+
+from parse import parse
 import serial
 
+from grbl import REALTIME_COMMANDS
 from Receiver import Receiver
 
 
@@ -38,6 +43,7 @@ class Controller(Receiver):
 
         self.flush = True
         self.maxPacketSize = 128
+        self.ackQ = Queue()
 
         self.serial = None
         try:
@@ -68,25 +74,68 @@ class Controller(Receiver):
             prevVal = val
         if len(packet) >= self.maxPacketSize:
             logging.warning("Max sized packet -- might be more data")
-        #### TODO handle commands in chevrons '<...>' or ????
-        #### TODO signal when 'ok' or 'error' received
-        return {'data': str(packet)}  #### TODO add metadata
+        packet = str(packet.strip())
+
+        if packet == "ok":
+            self.ackQ.put(True)
+            return None
+        elif packet.startswith("error:"):
+            try:
+                errorCode = int(parse("error:{num}", packet)['num'])
+            except Exception as ex:
+                logging.error(f"Invalid error message '{packet}': {ex}")
+            self.ackQ.put(True)
+            return None
+
+        if packet[0] == '<' and packet[-1] == '>':
+            packetType = "Status"
+        elif packet.startswith("[MSG:") and packet[-1] == ']':
+            packetType = "Feedback"
+        elif packet.startswith("[GC:") and packet[-1] == ']':
+            packetType = "GCodeState"
+        elif packet.startswith("[G") or packet.startswith("[TL0:") or packet.startswith("[PRB:"):
+            packetType = "Parameter"
+        elif packet.startswith("[VER:") and packet[-1] == ']':
+            packetType = "Build"
+        elif packet.startswith("[echo:") and packet[-1] == ']':
+            packetType = "Echo"
+        elif packet.startswith(">") and packet.endswith(":ok") == ']':
+            packetType = "Startup"
+        else:
+            packetType = "Standard"
+        result = {'data': str(packet), 'type': packetType}
+        logging.debug(f"Received: {result}")
+        return result
 
     def sendOutput(self, data):
-        """????
+        """Send string (typically a single line) to the GRBL device's input buffer
+
+          Remembers the number of bytes sent to the device and waits until there
+           is enough space to buffer the full line before sending.
+          Retires record of bytes sent when an ack is received from the device.
+          (Both 'ok' and 'error' responses mean that the associated bytes in the
+           buffer have been freed.)
+          This makes the assumption that the ack corresponds to the oldest line
+           size, so a lifo queue of line sizes can be used and the oldest entry
+           is popped each time an ack is signalled from the device receive side.
         """
         assert self.open, "Port not open"
+        #### pop all ack'd commands and wait until enough space in buffer
         numBytes = len(data)
         if numBytes <= (Controller.RX_BUFFER_SIZE - self.bufferedBytes):
             self.serial.write(bytes(data, encoding='utf8'))
             if self.flush:
                 self.serial.flush()
-        else:
-            logging.info("Controller Rx buffer full, waiting...")
-            ????
-            logging.info("done")
+            self.bufferedBytes += numBytes
+        logging.debug(f"Wrote: {data}")
 
-        logging.debug(f"Write to {self.port}: {data}")
+    def sendRealtimeOutput(self, cmdName):
+        """Send a realtime command to the controller.
+
+         Realtime commands do not occupy buffer space in the controller.
+        """
+        assert cmdName in REALTIME_COMMANDS.keys(), f"Command '{cmdName}' not a valid realtime command"
+        self.serial.write(REALTIME_COMMANDS[cmdName])
 
 
 #
