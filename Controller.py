@@ -18,7 +18,7 @@ from queue import Queue
 from parse import parse
 import serial
 
-from grbl import REALTIME_COMMANDS, RX_BUFFER_SIZE
+from grbl import RX_BUFFER_SIZE, REALTIME_COMMANDS, DOLLAR_COMMANDS
 from Receiver import Receiver
 
 
@@ -106,6 +106,8 @@ class Controller(Receiver):
             packetType = "Echo"
         elif packet.startswith(">") and packet.endswith(":ok") == ']':
             packetType = "Startup"
+        elif packet.startswith("$"):
+            packetType = "Parameter"
         else:
             packetType = "Standard"
         result = {'data': str(packet), 'type': packetType}
@@ -147,7 +149,16 @@ class Controller(Receiver):
          Realtime commands do not occupy buffer space in the controller.
         """
         assert cmdName in REALTIME_COMMANDS.keys(), f"Command '{cmdName}' not a valid realtime command"
-        self.serial.write(bytes([REALTIME_COMMANDS[cmdName], 13, 10]))
+        self.serial.write(bytes([REALTIME_COMMANDS[cmdName], ord('\r'), ord('\n')]))
+        self.serial.flush()
+
+    def sendDollarOutput(self, cmdName):
+        """Send a realtime "dollar" command to the controller.
+
+         Realtime commands do not occupy buffer space in the controller.
+        """
+        assert cmdName in DOLLAR_COMMANDS.keys(), f"Command '{cmdName}' not a valid dollar command"
+        self.serial.write(bytes([ord('$'), DOLLAR_COMMANDS[cmdName], ord('\r'), ord('\n')]))
         self.serial.flush()
 
 
