@@ -18,7 +18,7 @@ from queue import Queue
 from parse import parse
 import serial
 
-from grbl import REALTIME_COMMANDS
+from grbl import REALTIME_COMMANDS, RX_BUFFER_SIZE
 from Receiver import Receiver
 
 
@@ -44,6 +44,7 @@ class Controller(Receiver):
         self.flush = True
         self.maxPacketSize = 128
         self.ackQ = Queue()
+        self.bufferedBytes = []
 
         self.serial = None
         try:
@@ -74,7 +75,10 @@ class Controller(Receiver):
             prevVal = val
         if len(packet) >= self.maxPacketSize:
             logging.warning("Max sized packet -- might be more data")
-        packet = str(packet.strip())
+        packet = packet.decode('utf-8')
+        packet = packet.strip()
+        if not packet:
+            return None
 
         if packet == "ok":
             self.ackQ.put(True)
@@ -87,6 +91,7 @@ class Controller(Receiver):
             self.ackQ.put(True)
             return None
 
+        print("P", packet, len(packet))
         if packet[0] == '<' and packet[-1] == '>':
             packetType = "Status"
         elif packet.startswith("[MSG:") and packet[-1] == ']':
@@ -120,13 +125,20 @@ class Controller(Receiver):
            is popped each time an ack is signalled from the device receive side.
         """
         assert self.open, "Port not open"
-        #### pop all ack'd commands and wait until enough space in buffer
+        while not self.ackQ.empty():
+            self.ackQ.get()
+            self.bufferedBytes.pop(0)
+
+        data = data.strip() + "\r\n"
         numBytes = len(data)
-        if numBytes <= (Controller.RX_BUFFER_SIZE - self.bufferedBytes):
-            self.serial.write(bytes(data, encoding='utf8'))
-            if self.flush:
-                self.serial.flush()
-            self.bufferedBytes += numBytes
+        while numBytes > (RX_BUFFER_SIZE - sum(self.bufferedBytes)):
+            self.ackQ.get(block=True)
+            self.bufferedBytes.pop(0)
+
+        self.serial.write(bytes(data, encoding='utf8'))
+        if self.flush:
+            self.serial.flush()
+        self.bufferedBytes.append(numBytes)
         logging.debug(f"Wrote: {data}")
 
     def sendRealtimeOutput(self, cmdName):
@@ -135,7 +147,8 @@ class Controller(Receiver):
          Realtime commands do not occupy buffer space in the controller.
         """
         assert cmdName in REALTIME_COMMANDS.keys(), f"Command '{cmdName}' not a valid realtime command"
-        self.serial.write(REALTIME_COMMANDS[cmdName])
+        self.serial.write(bytes([REALTIME_COMMANDS[cmdName], 13, 10]))
+        self.serial.flush()
 
 
 #
@@ -147,6 +160,7 @@ if __name__ == '__main__':
     print(">", ctlr.getInput())
     ctlr.sendOutput("")
     print(">>", ctlr.getInput())
+
     ctlr.sendOutput("$?")
     print(">>>", ctlr.getInput())
     ctlr.sendOutput("$$")
