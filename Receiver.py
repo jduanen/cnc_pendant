@@ -74,7 +74,11 @@ class Receiver():
         raise NotImplementedError("Must define a method that reads the interface and puts on the 'inputQ'")
 
     def getInput(self, block=True, timeout=None):
-        return self.inputQ.get(block=block, timeout=timeout)
+        if not self.inputQ.empty():
+            ins = self.inputQ.get(block=block, timeout=timeout)
+        else:
+            ins = None
+        return ins
 
 
 #
