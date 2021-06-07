@@ -311,8 +311,8 @@ SETTINGS = {
 REALTIME_COMMANDS = {
     'CYCLE_START': 0x7e,    # cycle start ('~')
     'FEED_HOLD': 0x21,      # feed hold ('!')
-    'CURRENT_STATUS': 0x3f, # current status ('?')
-    'RESET_GRBL': 0x18,     # reset GRBL (Ctrl-X)
+    'STATUS': 0x3f,         # current status ('?')
+    'RESET': 0x18,          # reset GRBL (Ctrl-X)
     'SAFETY_DOOR': 0x84,    # SW equivalent of door switch
     'JOG_CANCEL': 0x85,     # cancels current jog state by Feed Hold and flushes jog commands in buffer
     'FEED_100': 0x90,       # set feed rate to 100% of programmed rate
