@@ -57,6 +57,7 @@ Connect an XHC WHB04B pendant to a GRBL-based CNC controller
   * sometimes emits a null data packet -- i.e., all zeros (key1, key2, incr, axis, jog)
     - sometimes first thing after powerup is a null packet
     - pendant looks like it continues emitting packets until it is reset
+
 - Display
   * pendant automatically displays the value of the axis knob with an asterix next to a coordinate line
     - host is not able to set the selection marker
@@ -75,12 +76,13 @@ Connect an XHC WHB04B pendant to a GRBL-based CNC controller
       * could suppress this in this object
     - doesn't automatically update the display if axis is Off
   * the display automatically updates CONT/STEP mode values based on knob positions
-  * the coordinate lines diplay the current machine position
+  * the coordinate lines display the current machine position
     - X, Y, Z or A, B, C coordinates if in Machine coordinate system
     - X1, Y1, Z1 or A1, B1, C1 coordinates if in Work coordinate system
   * the currently selected coordinate (i.e., the one where motion will occur) is (automatically) indicated on the display with an asterix
+
 - Input
-  * this object emits the (lightly parsed) basic events from the pendent
+  * this object emits the (lightly parsed) basic events from the pendant
     - puts them into an internal queue, provide method to pull from this input queue
     - the action logic (e.g., in the main code body) will pull from this queue via methods
     - an input thread handles device events, does the pre-processing, and queues the output
@@ -103,23 +105,27 @@ Connect an XHC WHB04B pendant to a GRBL-based CNC controller
   * all button and knob values are small integers -- except incr "Lead" == 155
   * the pendent emits NOP packets when the axis knob is not set to "Off" and the jog wheel is not moving
     - the pendent continuously sends a jog value of 0
-  * the input tuple contains the (possibly empty) name of a pressed key, the current setting of the axis knob,
-     the current setting of the increment knob, and the jog wheel delta
+  * the input tuple contains:
+    - the (possibly empty) name of a pressed key,
+    - the current setting of the axis knob, the current setting of the increment knob,
+    - and the jog wheel delta
   * if no key was pressed, then the key name will be None.
   * if the axis knob is set to "Off" a None is given for the axis value,
-     otherwise, the axis character is given as a string -- e.g, "X", or "A".
-  * the increment knob returns either a float (that corresponds to the increment to be moved by with each
-     click of the jog wheel when in "STEP" mode) or an integer (that corresponds to the percentage of the
-     maximum speed at which it can move).
+    - otherwise, the axis character is given as a string -- e.g, "X", or "A".
+  * the increment knob returns either:
+    - a float (that corresponds to the increment to be moved by with each click of the jog wheel when in "STEP" mode)
+    - or an integer (that corresponds to the percentage of the maximum speed at which it can move).
   * reports current axis and incr knob settings
     - axis: 0x06="off"
     - incr: 0x0e=0.001/2%, 0x0d=0.02/5% ...
-- always have to click motion mode button after power-on of pendant (i.e., either "Continuous" or "Step")
-- need to interogate the Controller to get the current values for the Coordinate
-- the -4 pendant only has four values (0x11-0x14), other two values for the -6
-- this application should interpret the final three positions of the incr knob as: 10, 50, 100?
-- starting up this program will force the pendant into RESET state
-  * will have to select motion mode in order to get out of reset
-- the input from the pendant and the pendant's display are logically independent
-  * it may take some time for the controller to receive inputs from the pendant and send back results that then are sent to the pendant's display
-  * everything should converge to a consistent state quickly
+
+* notes
+  - always have to click motion mode button after power-on of pendant (i.e., either "Continuous" or "Step")
+  - need to interrogate the Controller to get the current values for the Coordinate
+  - the -4 pendant only has four values (0x11-0x14), other two values for the -6
+  - this application should interpret the final three positions of the incr knob as: 10, 50, 100?
+  - starting up this program will force the pendant into RESET state
+    * will have to select motion mode in order to get out of reset
+  - the input from the pendant and the pendant's display are logically independent
+    * it may take some time for the controller to receive inputs from the pendant and send back results that then are sent to the pendant's display
+    * everything should converge to a consistent state quickly
