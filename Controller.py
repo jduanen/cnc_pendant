@@ -161,6 +161,11 @@ class Controller(Receiver):
         self.serial.write(bytes([ord('$'), DOLLAR_COMMANDS[cmdName], ord('\r'), ord('\n')]))
         self.serial.flush()
 
+    def sendJogOutput(self, unk):
+        """????
+        """
+        pass
+
 
 #
 # TEST
