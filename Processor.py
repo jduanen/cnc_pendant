@@ -68,16 +68,16 @@ class Processor():
             logging.warning("Controller to Pendant thread not running")
 
     def pendantInput(self):
-        print("PI")
+        logging.debug("Starting pendantInput thread")
         self.pendant.start()
         while self.p2cRunning.isSet():
             inputs = self.pendant.getInput()
             if not inputs:
                 continue
             inputs = inputs['data']
-            print("PIN:", inputs)
+            logging.debug(f"PIN: {inputs}")
             try:
-                print("K:", inputs['key2'], inputs['key1'])
+#                print("K:", inputs['key2'], inputs['key1'])
                 key = KEYMAP[inputs['key2']][inputs['key1']]
             except IndexError:
                 key = None
@@ -132,14 +132,16 @@ class Processor():
                     distance = 1  #### FIXME
                     speed = MAX_SPEED * incr * (1 if inputs['jog'] > 0 else -1)
                 logging.debug(f"Jog {distance} @ {speed}")
+        self.pendant.shutdown()
         logging.debug("Exit PendantInput")
 
     def controllerInput(self):
-        print("CI")
+        logging.debug("Starting controllerInput thread")
         self.controller.start()
         while self.c2pRunning.isSet():
             inputs = self.controller.getInput()
             print("CIN:", inputs)
+        self.controller.shutdown()
         logging.debug("Exit ControllerInput")
 
 
