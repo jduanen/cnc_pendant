@@ -33,7 +33,7 @@ class Receiver():
         self.receiverThread.start()
         logging.debug(f"Starting thread: {self.receiverThread.name}")
 
-    def shutdown(self, blocking=False):
+    def shutdown(self, blocking=True):
         """Tell input thread to shutdown.
 
           Have to wait until 'closed' is set to be sure thread is shutdown.
@@ -88,8 +88,18 @@ class Receiver():
 # TEST
 #
 if __name__ == '__main__':
+    import time
+
+    #### FIXME add real tests
+    logging.basicConfig(level="DEBUG",
+                        format='%(asctime)s %(levelname)-8s %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
     print("Start")
     rx = Receiver()
-    rx.shutdown()
+    rx.start()
+    time.sleep(1)
+    print("Shutting down")
+    rx.shutdown(False)
+    assert rx.isShutdown(), "Not shut down properly"
     print("Done")
 
