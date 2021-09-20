@@ -285,7 +285,7 @@ if __name__ == '__main__':
         if ins['key1'] == 2 and ins['key2'] == 0:
             break
     print("Shutting down")
-    p.shutdown(blocking=True)
+    p.shutdown()
     assert p.isShutdown(), "Not shutdown properly"
     print("Done")
 
