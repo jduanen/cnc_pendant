@@ -137,6 +137,8 @@ class CoordinateSpace():
 
 
 class Pendant(Receiver):
+    """Object that encapsulates the XHC WHB04B-4 pendant's USB receiver
+    """
     VENDOR_ID = 0x10ce
     PRODUCT_ID = 0xeb93
 
@@ -180,6 +182,9 @@ class Pendant(Receiver):
         return dispCmd
 
     def __init__(self):
+        """Connect to the USB RF dongle and issue command to bring the pendant
+            out of reset.
+        """
         self.motionMode = None
 
         self.deviceInfo = hid.enumerate(Pendant.VENDOR_ID, Pendant.PRODUCT_ID)
@@ -225,8 +230,8 @@ class Pendant(Receiver):
         return self.device.read(8, timeout=timeout)
 
     def _receive(self):
-        """Read a raw (unvalidated) input packet from the device, validate it,
-            and return a tuple with the input values.
+        """(Blocking) read a raw (unvalidated) input packet from the device,
+            validate it, and return a tuple with the input values.
 
           Input packets should all be eight bytes in length, anything
            less than that is not a valid input packet.
@@ -234,20 +239,20 @@ class Pendant(Receiver):
           The last byte of the input packet is a checksum -- but it's unclear
            how it works; have to fix this and validate packets.
 
-          Returns: tuple of signed ints (<key1>, <key2>, <increment>, <axis>, <jogDelta>)
+          Returns: input packet represented as a dict with a 'data' key whose
+                    whose value consists of a dict with the keys found in
+                    INPUT_FIELDS, and each value is a signed int
         """
-        inputs = {}
-        inputPacket = self._rawInputPacket()
-        if inputPacket:
-            if len(inputPacket) == 8:
-                ins = dict(zip(INPUT_FIELDS, struct.unpack("BBBBBBbB", inputPacket)))
-                assert ins['hdr'] == 0x04, f"Invalid input packet header {ins['hdr']}"
-                #### TODO figure out how their checksum works and validate input packets
-            else:
-                if len(inputPacket) != 0:
-                    logging.warning(f"Invalid packet: {[hex(x) for x in inputPacket] if inputPacket else 'None'}")
-            inputs['data'] = ins
-        return inputs
+        while True:
+            inputPacket = self._rawInputPacket()
+            if inputPacket:
+                break
+        if len(inputPacket) != 8:
+            logging.warning(f"Invalid packet: {[hex(x) for x in inputPacket] if inputPacket else 'None'}")
+        ins = dict(zip(INPUT_FIELDS, struct.unpack("BBBBBBbB", inputPacket)))
+        assert ins['hdr'] == 0x04, f"Invalid input packet header {ins['hdr']}"
+        #### TODO figure out how their checksum works and validate input packets
+        return {'data': ins}
 
     def sendOutput(self, data):
         HDR = bytes([0x06])
@@ -267,10 +272,14 @@ class Pendant(Receiver):
 #
 if __name__ == '__main__':
     #### FIXME add real tests
+    logging.basicConfig(level="DEBUG",
+                        format='%(asctime)s %(levelname)-8s %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
     print("Start")
     p = Pendant()
     p.start()
     while True:
+        print("get input")
         ins = p.getInput()['data']
         print("Input:", ins)
         if ins['key1'] == 2 and ins['key2'] == 0:
