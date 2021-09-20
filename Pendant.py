@@ -252,7 +252,7 @@ class Pendant(Receiver):
         ins = dict(zip(INPUT_FIELDS, struct.unpack("BBBBBBbB", inputPacket)))
         assert ins['hdr'] == 0x04, f"Invalid input packet header {ins['hdr']}"
         #### TODO figure out how their checksum works and validate input packets
-        return {'data': ins}
+        return {'data': ins, 'type': "input"}
 
     def sendOutput(self, data):
         HDR = bytes([0x06])
@@ -284,6 +284,8 @@ if __name__ == '__main__':
         print("Input:", ins)
         if ins['key1'] == 2 and ins['key2'] == 0:
             break
-    p.shutdown()
+    print("Shutting down")
+    p.shutdown(blocking=True)
+    assert p.isShutdown(), "Not shutdown properly"
     print("Done")
 
