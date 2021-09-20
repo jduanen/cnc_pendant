@@ -6,6 +6,7 @@ Base class that provides a thread for receiving from a (USB or serial) link and
 import logging
 import queue
 import threading
+import time
 
 
 class Receiver():
@@ -47,14 +48,14 @@ class Receiver():
         return self.closed
 
     def waitForShutdown(self):
-        #### FIXME yield and wait until thread sets closed
-        pass
+        while not self.closed:
+            time.sleep(1)
 
     def receiver(self):
         """Decorator that wraps code that reads from a comm link and queues up
             the input.
 
-          Loops until told to shutdown by the 'receiving' flag.
+          Loops until told to shutdown by the 'receiving' event.
           Puts a final None value on the inputQ and indicates that its the input
            thread is done.
         """
@@ -74,11 +75,13 @@ class Receiver():
         raise NotImplementedError("Must define a method that reads the interface and puts on the 'inputQ'")
 
     def getInput(self, block=True, timeout=None):
-        if not self.inputQ.empty():
-            ins = self.inputQ.get(block=block, timeout=timeout)
-        else:
-            ins = None
-        return ins
+        """Return input from the input queue.
+
+          Can optionally be a blocking call, with an optional timeout
+
+          Returns: next value from input queue, or None
+        """
+        return self.inputQ.get(block=block, timeout=timeout)
 
 
 #
