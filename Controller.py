@@ -126,7 +126,7 @@ class Controller(Receiver):
            size, so a lifo queue of line sizes can be used and the oldest entry
            is popped each time an ack is signalled from the device receive side.
         """
-        assert self.open, "Port not open"
+        assert self.open, "Controller port not open"
         while not self.ackQ.empty():
             self.ackQ.get()
             self.bufferedBytes.pop(0)
@@ -171,8 +171,15 @@ class Controller(Receiver):
 # TEST
 #
 if __name__ == '__main__':
+    import time
+
+    #### FIXME add real tests
+    logging.basicConfig(level="INFO",
+                        format='%(asctime)s %(levelname)-8s %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
     print("Start")
     ctlr = Controller()
+    ctlr.start()
     print(">", ctlr.getInput())
     ctlr.sendOutput("")
     print(">>", ctlr.getInput())
@@ -183,8 +190,10 @@ if __name__ == '__main__':
     i = ctlr.getInput()
     print(">>>>", i)
     while i:
-        i = ctlr.getInput()
+        i = ctlr.getInput(False, 1)
         print(">>>>>", i)
+    print("Shutting down")
+    ctlr.sendOutput("")  # poke controller to elicit a response
     ctlr.shutdown()
     print("Done")
 
