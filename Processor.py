@@ -23,7 +23,7 @@ MAX_SPEED = 1000  #### FIXME
 assert JOG_SPEED <= MAX_SPEED
 
 
-#### TODO consider replacing Running flags with Event objects
+#### TODO make use of Event objects consistent with other modules
 class Processor():
     def __init__(self, pendant, controller, host, macros={}):
         assert isinstance(pendant, Pendant), f"pendant is not an instance of Pendant: {type(pendant)}"
@@ -36,40 +36,45 @@ class Processor():
 
         self.stepMode = None  #### FIXME deal with startup default value
 
-        self.p2cRunning = None
+        self.p2cRunning = threading.Event()
         self.p2cThread = threading.Thread(target=self.pendantInput, name="p2c")
 #        self.p2cThread.daemon = True
 
-        self.c2pRunning = None
+        self.c2pRunning = threading.Event()
         self.c2pThread = threading.Thread(target=self.controllerInput, name="c2p")
 #        self.c2pThread.daemon = True
 
         #### TODO hook up the host
 
-    def start(self):
-        self.p2cRunning = True
+        self.p2cRunning.set()
         self.p2cThread.start()
-        self.c2pRunning = True
+        self.c2pRunning.set()
         self.c2pThread.start()
 
     def shutdown(self):
-        if self.p2cRunning:
-            self.p2cRunning = False
+        if self.p2cRunning.isSet():
+            self.p2cRunning.clear()
             logging.debug("Waiting for P2C thread to end")
             self.p2cThread.join()
+            logging.debug("P2C thread done")
         else:
             logging.warning("Pendant to Controller thread not running")
-        if self.c2pRunning:
-            self.c2pRunning = False
+        if self.c2pRunning.isSet():
+            self.c2pRunning.clear()
             logging.debug("Waiting for C2P thread to end")
             self.c2pThread.join()
+            logging.debug("C2P thread done")
         else:
             logging.warning("Controller to Pendant thread not running")
 
     def pendantInput(self):
+        print("PI")
         self.pendant.start()
-        while self.p2cRunning:
+        while self.p2cRunning.isSet():
             inputs = self.pendant.getInput()
+            if not inputs:
+                continue
+            inputs = inputs['data']
             print("PIN:", inputs)
             try:
                 print("K:", inputs['key2'], inputs['key1'])
@@ -130,8 +135,9 @@ class Processor():
         logging.debug("Exit PendantInput")
 
     def controllerInput(self):
+        print("CI")
         self.controller.start()
-        while self.c2pRunning:
+        while self.c2pRunning.isSet():
             inputs = self.controller.getInput()
             print("CIN:", inputs)
         logging.debug("Exit ControllerInput")
@@ -144,6 +150,10 @@ if __name__ == '__main__':
     import sys
     import time
 
+    #### FIXME add real tests
+    logging.basicConfig(level="DEBUG",
+                        format='%(asctime)s %(levelname)-8s %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
     print("START")
     p = Pendant()
     print("p")
@@ -153,7 +163,8 @@ if __name__ == '__main__':
     print("h")
     proc = Processor(p, c, h)
     print("RUN")
-    time.sleep(30)
+    time.sleep(10)
+    print("SHUTTING DOWN")
     proc.shutdown()
     print("DONE")
     sys.exit(0)
