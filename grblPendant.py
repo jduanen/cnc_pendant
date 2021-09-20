@@ -52,8 +52,6 @@ def run(options):
     host = Host()
     proc = Processor(pend, ctlr, host, macros)
     print("PROC START")
-    proc.start()
-    print("PROC DONE")
     while True:
         time.sleep(1000)
     print("DONE DONE")
