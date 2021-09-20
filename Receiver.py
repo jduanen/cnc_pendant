@@ -81,7 +81,15 @@ class Receiver():
 
           Returns: next value from input queue, or None
         """
-        return self.inputQ.get(block=block, timeout=timeout)
+        inputVal = None
+        if block:
+            inputVal = self.inputQ.get()
+        else:
+            try:
+                inputVal = self.inputQ.get(block=True, timeout=timeout)
+            except:
+                logging.debug("No input, blocking get() timed out")
+        return inputVal
 
 
 #
@@ -90,16 +98,25 @@ class Receiver():
 if __name__ == '__main__':
     import time
 
+    class DummyReceiver(Receiver):
+        def __init__(self):
+            self.count = 0
+            super().__init__(name="DummyReceiver")
+        def _receive(self):
+            if self.count == 0:
+                print("Running")
+            self.count += 1
+
     #### FIXME add real tests
     logging.basicConfig(level="DEBUG",
                         format='%(asctime)s %(levelname)-8s %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
     print("Start")
-    rx = Receiver()
+    rx = DummyReceiver()
     rx.start()
     time.sleep(1)
     print("Shutting down")
-    rx.shutdown(False)
+    rx.shutdown()
     assert rx.isShutdown(), "Not shut down properly"
     print("Done")
 
