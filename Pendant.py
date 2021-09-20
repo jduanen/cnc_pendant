@@ -271,6 +271,7 @@ class Pendant(Receiver):
 # TEST
 #
 if __name__ == '__main__':
+    # N.B. must press a motion mode button to start the test, and hit "stop" to end test
     #### FIXME add real tests
     logging.basicConfig(level="DEBUG",
                         format='%(asctime)s %(levelname)-8s %(message)s',
