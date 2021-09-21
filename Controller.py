@@ -8,6 +8,23 @@ Notes:
     - '[0-132]=value' to save Grbl setting value
     - 'N[0-9]=line' to save startup block
   * Cycle Start, Feed Hold, and Reset realtime commands have corresponding HW buttons
+
+  * types of packets that can be sent by the controller:
+    - 'ok': command ack at end of execution
+    - 'error:<code>': error of type <code> occurred
+    - '<...>': angle brackets enclose status report data
+    - 'Grbl <X.Xx> ['$' for help]': startup message version X.Xx
+    - 'ALARM:<code>': alarm of type <code> occurred, controller is now in alarm state
+    - '$<reg>=<val>': set register <reg> to value <val>
+    - '$N<reg>=<val>': set register <reg> to value <val> ????
+    - '[MSG: ... ]': feedback message given not in response to a query
+    - '[GC: ... ]': message in response to a $G g-code state message query
+    - '[HLP: ... ]': help message
+    - '[G54:], [G55:], [G56:], [G57:], [G58:], [G59:], [G28:], [G30:], [G92:], [TLO:], and [PRB:]': messages with parameter data from $# query
+    - '[VER: ... ]': version/build info from $I query
+    - '[OPT: ... ]': compile time options from $I query
+    - '[echo: ... ]': automated line echo from pre-parsed string prior to g-code parsing
+    - '>G54G20:ok': open angle bracket indicates startup line execution
 '''
 
 #### TODO implement buffer-aware streaming interface and separate realtime interface
@@ -18,7 +35,7 @@ from queue import Queue
 from parse import parse
 import serial
 
-from grbl import RX_BUFFER_SIZE, REALTIME_COMMANDS, DOLLAR_COMMANDS
+from grbl import RX_BUFFER_SIZE, REALTIME_COMMANDS, DOLLAR_COMMANDS, DOLLAR_VIEW_COMMANDS
 from Receiver import Receiver
 
 
@@ -84,23 +101,32 @@ class Controller(Receiver):
             self.ackQ.put(True)
             return None
         elif packet.startswith("error:"):
+            #### FIXME
+            #### TODO should use error descriptions not codes -- map the error code somewhere
             try:
                 errorCode = int(parse("error:{num}", packet)['num'])
             except Exception as ex:
                 logging.error(f"Invalid error message '{packet}': {ex}")
             self.ackQ.put(True)
             return None
+        elif packet.startswith("ALARM:"):
+            #### FIXME
+            #### TODO should use error descriptions not codes -- map the error code somewhere
+            logging.error("Unimplemented ALARM handling")
+            self.ackQ.put(True)
+            return None
 
-        print("P", packet, len(packet))
         if packet[0] == '<' and packet[-1] == '>':
             packetType = "Status"
         elif packet.startswith("[MSG:") and packet[-1] == ']':
             packetType = "Feedback"
         elif packet.startswith("[GC:") and packet[-1] == ']':
             packetType = "GCodeState"
-        elif packet.startswith("[G") or packet.startswith("[TL0:") or packet.startswith("[PRB:"):
+        elif packet.startswith("[G") or packet.startswith("[TLO:") or packet.startswith("[PRB:"):
             packetType = "Parameter"
         elif packet.startswith("[VER:") and packet[-1] == ']':
+            packetType = "Build"
+        elif packet.startswith("[OPT:") and packet[-1] == ']':
             packetType = "Build"
         elif packet.startswith("[echo:") and packet[-1] == ']':
             packetType = "Echo"
@@ -113,6 +139,16 @@ class Controller(Receiver):
         result = {'data': str(packet), 'type': packetType}
         logging.debug(f"Received: {result}")
         return result
+
+    #### FIXME
+    def getAllInput(self):
+        allInput = self.getInput()['data']
+        while True:
+            inLine = self.getInput(block=True, timeout=0.5)
+            if not inLine:
+                break
+            allInput += f"\n{inLine['data']}"
+        return allInput
 
     def sendOutput(self, data):
         """Send string (typically a single line) to the GRBL device's input buffer
@@ -129,42 +165,64 @@ class Controller(Receiver):
         assert self.open, "Controller port not open"
         while not self.ackQ.empty():
             self.ackQ.get()
-            self.bufferedBytes.pop(0)
+            if len(self.bufferedBytes) > 0:
+                self.bufferedBytes.pop(0)
 
         data = data.strip() + "\r\n"
         numBytes = len(data)
         while numBytes > (RX_BUFFER_SIZE - sum(self.bufferedBytes)):
             self.ackQ.get(block=True)
-            self.bufferedBytes.pop(0)
+            if len(self.bufferedBytes) > 0:
+                self.bufferedBytes.pop(0)
 
-        self.serial.write(bytes(data, encoding='utf8'))
+        self.serial.write(bytes(data, encoding='utf-8'))
         if self.flush:
             self.serial.flush()
         self.bufferedBytes.append(numBytes)
         logging.debug(f"Wrote: {data}")
 
-    def sendRealtimeOutput(self, cmdName):
+    def sendRealtimeCommand(self, cmdName):
         """Send a realtime command to the controller.
 
          Realtime commands do not occupy buffer space in the controller.
         """
         assert cmdName in REALTIME_COMMANDS.keys(), f"Command '{cmdName}' not a valid realtime command"
-        self.serial.write(bytes([REALTIME_COMMANDS[cmdName], ord('\r'), ord('\n')]))
+        self.serial.write(bytes(REALTIME_COMMANDS[cmdName] + "\r\n"), encoding="utf-8")
         self.serial.flush()
 
-    def sendDollarOutput(self, cmdName):
+    def sendDollarView(self, cmdName):
         """Send a realtime "dollar" command to the controller.
 
          Realtime commands do not occupy buffer space in the controller.
         """
-        assert cmdName in DOLLAR_COMMANDS.keys(), f"Command '{cmdName}' not a valid dollar command"
-        self.serial.write(bytes([ord('$'), DOLLAR_COMMANDS[cmdName], ord('\r'), ord('\n')]))
+        assert cmdName in DOLLAR_VIEW_COMMANDS, f"Command '{cmdName}' not a valid dollar command"
+        self.serial.write(bytes('$' + DOLLAR_COMMANDS[cmdName] + "\r\n", encoding="utf-8"))
         self.serial.flush()
 
-    def sendJogOutput(self, unk):
+    def killAlarmLock(self):
         """????
         """
+        #### FIXME
         pass
+
+    def runHomingCycle(self):
+        """????
+        """
+        #### FIXME
+        pass
+
+    def job(self, jogCmd):
+        """????
+        """
+        #### FIXME
+        pass
+
+    def shutdown(self, blocking=True):
+        """????
+        """
+        # poke controller to elicit a response to end wait for input
+        self.sendOutput("")
+        super().shutdown(blocking)
 
 
 #
@@ -180,20 +238,20 @@ if __name__ == '__main__':
     print("Start")
     ctlr = Controller()
     ctlr.start()
-    print(">", ctlr.getInput())
-    ctlr.sendOutput("")
-    print(">>", ctlr.getInput())
+    print(f"Startup Message: {ctlr.getInput()['data']}")
+    print(f"message: {ctlr.getInput()['data']}")
+    print("")
 
-    ctlr.sendOutput("$?")
-    print(">>>", ctlr.getInput())
-    ctlr.sendOutput("$$")
-    i = ctlr.getInput()
-    print(">>>>", i)
-    while i:
-        i = ctlr.getInput(False, 1)
-        print(">>>>>", i)
+    for dCmd in DOLLAR_VIEW_COMMANDS:
+        print(f"{dCmd}:")
+        ctlr.sendDollarView(dCmd)
+        i = ctlr.getInput()
+        while i:
+            print(f"    {i['data']}, {i['type']}")
+            i = ctlr.getInput(block=False, timeout=0.5)
+        print("")
+
     print("Shutting down")
-    ctlr.sendOutput("")  # poke controller to elicit a response
     ctlr.shutdown()
+    assert ctlr.isShutdown(), "Not shutdown properly"
     print("Done")
-
