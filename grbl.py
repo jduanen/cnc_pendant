@@ -1,29 +1,256 @@
 '''
 Library containing definitions relevent to GRBL-based controllers
 
-GRBL Build Options:
-(default enabled)
-  * V: Variable Spindle -- No, don't have on my X-Carve
-  * M: Mist Collant (M7) -- Yes, I'll use as vacuum control
-  * C: CoreXY -- ?
-  * P: Parking Motion -- ?
-  * Z: Homing Force Origin -- ?
-  * H: Homing Single Axis Commands -- ?
-  * T: Two limit sitches on axis -- No, don't have on my X-Carve
-  * A: Allow feed rate overrides in probe cycles -- Yes
-  * D: Use spindle direction as enable pin -- ?
-  * 0: Spindle enable off when speed is zero -- ?
-  * S: Software limit pin debouncing -- ?
-  * R: Parking override control -- ?
-  * +: Safety door input pin -- No, don't have on my X-Carve
-  * 2: Dual axis motors -- ?
-(default disabled)
-  * *: Resore all EEPROM command -- ?
-  * $: Restore EEPROM '$' settings command -- ?
-  * #: Resore EEPROM parameter data command -- ?
-  * I: Build info write user string command -- ?
-  * E: Force sync upon EEPROM write -- ?
-  * L: Homing initialization auto-lock -- ?
+* List of Supported G-Codes in Grbl v1.1:
+  - Non-Modal Commands:
+    * G4: dwell for given period (X, U, or P)
+    * G10 L2 P?: change G5? work coordinate system origin setting
+    * G10 L20 P?: calculated G5? work coordinate system origin
+    * G28: return to home -- machine zero (aka machine reference point)
+    * G30: return to secondary home position -- machine zero
+    * G28.1: change pre-defined machine home position
+    * G30.1: change pre-defined secondary machine home position
+    * G53: machine coordinate system (MCS), reference machine zero rather than program zero
+    * G92: position register, programming of vector from part zero to tool tip
+    * G92.1: clear position register
+  - Motion Modes:
+    * G0: rapid positioning, one to three axis moves
+    * G1: linear interpolation between start and end points
+    * G2: clockwise circular interpolation
+    * G3: counter-clockwise circular interpolation
+    * G38.2: probe toward workpiece, stop on contact, signal if failure
+    * G38.3: probe toward workpiece, stop on contact
+    * G38.4: probe away from workpiece, stop on loss of contact, signal if failure
+    * G38.5: probe away from workpiece, stop on loss of contact
+    * G80: cancel canned cycle
+  - Feed Rate Modes:
+    * G93: feedrate per minute
+    * G94: fixed cycle, simple cycle, for roughing
+  - Unit Modes:
+    * G20: inches mode
+    * G21: mm mode
+  - Distance Modes:
+    * G90: absolute mode
+    * G91: incremental mode
+  - Arc IJK Distance Modes:
+    * G91.1: incremental IJK arc mode
+  - Plane Select Modes:
+    * G17: select XY plane
+    * G18: select ZX plane
+    * G19: select YZ plane
+  - Tool Length Offset Modes:
+    * G43.1: dynamic tool length offset
+    * G49: tool length offset compensation cancel -- cancels G43 or G44
+  - Cutter Compensation Modes:
+    * G40: tool radius compensation off -- cancels G41 or G42
+  - Coordinate System Modes:
+    * G54: Work Coordinate System (WCS) #0
+    * G55: Work Coordinate System (WCS) #1
+    * G56: Work Coordinate System (WCS) #2
+    * G57: Work Coordinate System (WCS) #3
+    * G58: Work Coordinate System (WCS) #4
+    * G59: Work Coordinate System (WCS) #5
+  - Control Modes:
+    * G61: exact stop check, modal, can be cancelled with G64
+  - Program Flow:
+    * M0: pause running program,resumes when resume button pressed 
+    * M1: pause running program if stop switch is on, resumes when resume button pressed
+    * M2: end the program, restart with Cycle Start command
+    * M30*: exchange pallet shuttles and end the program, restart with Cycle Start command
+  - Spindle Control:
+    * M3: start spindle clockwise
+    * M4: start spindle counter-clockwise
+    * M5: stop spindle
+  - Coolant Control:
+    * M7*: turn on mist coolant
+    * M8: turn on flood cooland
+    * M9: turn off both flood and mist coolant
+  - Valid Non-Command Words:
+    * F: feed rate, in defined units
+    * I: define arc center in X axis for G02 or G03 arc commands
+    * J: define arc center in Y axis for G02 or G03 arc commands
+    * K: define arc center in Z axis for G02 or G03 arc commands
+    * L: fixed cycle loop count; register to edit using G10
+    * N: line/block number in program; system parameter to change using G10
+    * P: parameter address
+    * R: size of arc radius, or retract height
+    * S: spindle or surface speed, depending on mode (G97 or G96, respectively)
+    * T: tool selection
+    * X: absolute or incremental position of X axis
+    * Y: absolute or incremental position of Y axis
+    * Z: absolute or incremental position of Z axis
+
+* Grbl v1.1 "Dollar" Commands
+  - '$$': view settings
+  - '$<num>=<val>': set setting number <num> to <val>
+  - '$#': view gcode parameters
+    * offset values for G5? work coordinates, G28/G30 pre-defined positions, G92 coordinate offset, tool length offsets, and probing
+    * persistent -- written to EEPROM when changed
+    * responds with e.g.,
+      - [G54:4.000,0.000,0.000]
+      ...
+      - [G59:0.000,0.000,0.000]
+      - [G28:1.000,2.000,0.000]
+      - [G30:4.000,6.000,0.000]
+      - [G92:0.000,0.000,0.000]
+      - [TLO:0.000] # tool length offset for default z-axis
+      - [PRB:0.000,0.000,0.000:?] # coordinates of last probe cycle, ':1' ending means success, ':0' means failure
+  - '$G': view gcode parser state
+    * shows modal state, organized by modal groups (modal group, member words) '*' is power-on default
+      - Motion Mode: G0*, G1, G2, G3, G38.2, G38.3, G38.4, G38.5, G80
+      - Coordinate System Select: G54*, G55, G56, G57, G58, G59
+      - Plane Select: G17*, G18, G19
+      - 
+    * e.g., [GC:G0 G54 G17 G21 G90 G94 M0 M5 M9 T0 S0.0 F500.0]
+  - '$I': view build info
+    * can be (persistently) modified with '$I=<str>' command
+  - '$N<num>': view startup blocks
+    * can be (persistently) modified with '$N<num>=<str>' command
+  - '$C': toggles check g-code mode on/off
+    * process all given g-code, but don't move motors
+    * automatically does soft-reset ('^X') when toggled off
+  - '$X': kill alarm lock
+    * comes up in this state if homing is enabled
+    * shouldn't be used as machine doesn't know its position
+      - should only use G91 and make short moves
+      - do homing cycle asap
+    * does not execute startup lines
+  - '$H': run homing cycle
+    * set G28 or G30 for post-homing start position
+      - e.g., manually jog and then use G28.1/G30.1 to save current position
+        * then G28/G30 to go there
+  - '$J=<cmds>': jog
+    * can queue multiple commands in planning buffer
+      - queued commands are canceled with feed-hold command ('!')
+    * returns 'ok' ack line once command is queued
+      - returns 'error' if not valid or exceeds soft-limit
+    * jog commands do not change g-code parser state
+    * feed rate is interpreted in G94 units per minute
+    * must provide one or more axes (i.e., 'X', 'Y', or 'Z') and feed rate ('F')
+    * optional: G20 (inch), G21 (mm), G90 (absolute), G91 (incremental), G53 (machine coordinates)
+    * example commands: $J=X10.0 Y-1.5 F500
+  - '$RST=<char>': restore Grbl settings and data to default values
+    * <char> = '$': erase and restore "dollar" ('$$') settings to defaults
+    * <char> = '#': erase and zero all G54-G59 work coordinate offsets and G28/G30 positions in EEPROM
+      - easy way of clearing coordinate settings
+    * <char> = '$': erase and restore all EEPROM settings to defaults
+      - includes '$$' and '$#' settings, '$N' startup lines, and '$I' build info string
+  - '$SLP': enable sleep mode
+    * shut down spindle, coolant, and stepper enable pins
+    * block all commands
+    * exited by soft-reset or power-cycle
+    * part machine in safe location before calling this
+
+* Grbl v1.1 Realtime Commands
+  - execute in O(10)msec
+  - single character commands that can be sent at any time
+    * no CR/LF required
+  - not considered part of the streaming protocol -- independent
+    * not queued, executed sequentially
+  - tied to corrensponding input pins
+  - '^X' (0x18): soft-reset
+    * halts and resets Grbl without power cycle
+    * throws alarm if in motion as position might be lost
+      - if not in motion, retains position and don't have to rehome
+  - '?': status report query
+    * returns runtime data in a status report message
+    * doesn't respond during homing cycle or in alarm state
+  - '~': cycle start/resume
+    * resumes after feed hold and M0 program pauses
+      - otherwise ignored 
+  - '!': feed hold
+    * puts Grbl into suspend/HOLD state
+      - if in motion, decelerates and stops
+    * works when in IDLE, RUN, or JOG state
+      - ignored otherwise
+    * does not disable spindle or coolant, only stops motion
+  - 0x84: safety door
+  - 0x85: jog cancel
+    * ignored if not in JOG state
+  - 0x90-0x94: feed rate overrides
+    * immediately change feed rate
+      - doesn't alter rapid rates -- e.g., G0, G28, G30, or jog motions
+    * can't be greater than 200%
+    * 0x90: 100% of programmed rate
+    * 0x91: increase 10%
+    * 0x92: decrease 10%
+    * 0x93: increase 1%
+    * 0x94: decrease 1%
+  - 0x95-0x97: rapid overrides
+    * immediately change rapid rate
+      - only affects rapid rates -- i.e., G0, G28, and G30
+    * 0x95: set to 100% (full) rapid rate
+    * 0x96: set to 50% of rapid rate
+    * 0x97: set to 25% of rapid rate
+  - 0x99-0x9D: spindle speed overrides
+    * immediately change spindle speed
+      - works even if spindle is not enabled at the time
+    * can't be greater than 200%
+    * 0x99: set to 100% (full) programmed spindle speed
+    * 0x9A: increase spindle speed by 10%
+    * 0x9B: decrease spindle speed by 10%
+    * 0x9C: increase spindle speed by 1%
+    * 0x9D: decrease spindle speed by 1%
+  - 0x9E: toggle spindle stop
+    * only works if machine is in HOLD mode
+      - works even if spindle is not enabled at the time
+      - ignored if in motion
+    * after cycle start spindle state will be restored after 4 secs
+    * can change override speed values while the spindle is stopped
+  - 0xA0: toggle flood coolant
+    * toggles flood coolant on/off
+    * can be done any time in IDLE, RUN, or HOLD states
+      - ignored otherwise
+    * acts like M8/M9, but can be done while running
+  - 0xA1: toggle mist coolant
+    * toggles mist coolant on/off
+      - must be enabled at compile-time, disabled by default
+    * can be done any time in IDLE, RUN, or HOLD states
+      - ignored otherwise
+    * acts like M7/M9, but can be done while running
+
+* Grbl Build Options
+  - default enabled
+    * V: Variable Spindle -- No, don't have on my X-Carve
+    * M: Mist Collant (M7) -- Yes, I'll use as vacuum control
+    * C: CoreXY -- ?
+    * P: Parking Motion -- ?
+    * Z: Homing Force Origin -- ?
+    * H: Homing Single Axis Commands -- ?
+    * T: Two limit sitches on axis -- Yes
+    * A: Allow feed rate overrides in probe cycles -- Yes
+    * D: Use spindle direction as enable pin -- ?
+    * 0: Spindle enable off when speed is zero -- ?
+    * S: Software limit pin debouncing -- ?
+    * R: Parking override control -- ?
+    * +: Safety door input pin -- No, don't have on my X-Carve
+    * 2: Dual axis motors -- ?
+  - default disabled
+    * *: Resore all EEPROM command -- ?
+    * $: Restore EEPROM '$' settings command -- ?
+    * #: Resore EEPROM parameter data command -- ?
+    * I: Build info write user string command -- ?
+    * E: Force sync upon EEPROM write -- ?
+    * L: Homing initialization auto-lock -- ?
+
+* Grbl CLI
+  - 'ok': command ack at end of execution
+  - 'error:<code>': error of type <code> occurred
+  - '<...>': enclose status report data
+  - 'Grbl <X.Xx> ['$' for help]': startup message version X.Xx
+  - 'ALARM:<code>': alarm of type <code> occurred, controller is now in alarm state
+  - '$<reg>=<val>': set register <reg> to value <val>
+  - '$N<reg>=<val>': set register <reg> to value <val> ????
+  - '[MSG: ... ]': feedback message given not in response to a query
+  - '[GC: ... ]': message in response to a $G g-code state message query
+  - '[HLP: ... ]': help message
+  - '[G54:], [G55:], [G56:], [G57:], [G58:], [G59:], [G28:], [G30:], [G92:], [TLO:], and [PRB:]': messages with parameter data from $# query
+  - '[VER: ... ]': version/build info from $I query
+  - '[OPT: ... ]': compile time options from $I query
+  - '[echo: ... ]': automated line echo from pre-parsed string prior to g-code parsing
+    * this is a config.h option
+  - '>G54G20:ok': open angle bracket indicates startup line execution
+    * 'ok' means it executed correctly -- no new line required
 '''
 
 #### TODO save current parameters from my grbl controller
@@ -36,7 +263,7 @@ from collections import namedtuple
 from parse import parse
 
 
-GRBL_VERSION = "1.0cJDN-2"   #### FIXME, update to 1.1h JDN (with Build Option codes)
+GRBL_VERSION = "1.1hJDN-0"
 
 GRBL_PROMPT = f"Grbl {GRBL_VERSION} ['$' for help]"
 
