@@ -253,10 +253,6 @@ Library containing definitions relevent to GRBL-based controllers
     * 'ok' means it executed correctly -- no new line required
 '''
 
-#### TODO save current parameters from my grbl controller
-#### TODO recompile grbl v1.1h and configure for my system
-#### TODO recalibrate all three axes
-#### TODO fix Y axis limit switch -- order spares
     
 
 from collections import namedtuple
@@ -555,16 +551,32 @@ REALTIME_COMMANDS = {
     'TOGGLE_MIST': 0xa1     # toggle mist coolant state
 }
 
+'''
+* Grbl v1.1 "Dollar" Commands that aren't just views (some take args):
+  - '$<num>=<val>': set setting number <num> to <val>
+  - '$N<num>=<str>': (persistently) modified startup line <num>
+  - '$C': toggles check g-code mode on/off
+    * returns a startup line (does a soft-reset?), then "[MSG:Enable]"/"[MSG:Disabled]", followed by 'ok'
+  - '$X': kill alarm lock
+  - '$H': run homing cycle
+  - '$J=<cmds>': jog command
+  - '$RST=<char>': restore Grbl settings and data to default values
+'''
 DOLLAR_COMMANDS = {
-    'VIEW_SETTINGS': ord('$'),   # view Grbl settings
-    'VIEW_PARAMETERS': ord('#'), # view '#' parameters
-    'VIEW_PARSER': ord('G'),     # view parser state
-    'VIEW_BUILD': ord('I'),      # view build info
-    'VIEW_STARTUPS': ord('N'),   # view startup blocks
-    'GCODE_MODE': ord('C'),      # check gcode mode
-    'KILL_ALARM': ord('X'),      # kill alarm lock
-    'RUN_HOMING': ord('H')       # run homing cycle
+    'VIEW_SETTINGS': "$",   # view Grbl settings
+    'VIEW_PARAMETERS': "#", # view '#' parameters
+    'VIEW_PARSER': "G",     # view parser state
+    'VIEW_BUILD': "I",      # view build info
+    'VIEW_STARTUPS': "N",   # view startup blocks
+    'GCODE_MODE': "C",      # check gcode mode
+    'KILL_ALARM': "X",      # kill alarm lock
+    'RUN_HOMING': "H",      # run homing cycle
+    'JOG_COMMAND': "J",     # jog command
+    'RESTORE_DATA': "RST",  # restore data
+    'SLEEP': "SLP"          # put machine into sleep mode
 }
+
+DOLLAR_VIEW_COMMANDS = [s for s in DOLLAR_COMMANDS.keys() if s.startswith('VIEW')]
 
 
 def alarmDescription(msg, full=True):
