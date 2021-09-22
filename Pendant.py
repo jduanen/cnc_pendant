@@ -200,11 +200,15 @@ class Pendant(Receiver):
     def _reset(self):
         """Issue command to bring pendant out of reset
 
-         Set the RESET flag (leave other flags 0), then wait for motion mode
-          button to be pressed (ignore other inputs), then clear RESET flag
-          and set display to the current values.
-         N.B. The coordinate display values are retained across power cycle
-          events until updated by inputs from the Controller.
+          Set the RESET flag (leave other flags 0), then wait for motion mode
+           button to be pressed (ignore other inputs), then clear RESET flag
+           and set display to the current values.
+
+          This approach allows pendant to power up/down without forcing a reset
+           of the machine.
+
+          N.B. The coordinate display values are retained across power cycle
+           events, and stay until updated by inputs from the Controller.
         """
         self.sendOutput(Pendant._makeDisplayCommand(reset=1))
         while True:
