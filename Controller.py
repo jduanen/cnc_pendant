@@ -333,7 +333,7 @@ class Controller(Receiver):
         """????
         """
         # poke controller to elicit a response to end wait for input
-        self._sendCmd("")
+        self._sendCmd("$")
         super().shutdown(blocking)
 
 
