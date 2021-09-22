@@ -142,12 +142,16 @@ Library containing definitions relevent to GRBL-based controllers
     * part machine in safe location before calling this
 
 * Grbl v1.1 Realtime Commands
-  - execute in O(10)msec
-  - single character commands that can be sent at any time
-    * no CR/LF required
-  - not considered part of the streaming protocol -- independent
-    * not queued, executed sequentially
-  - tied to corrensponding input pins
+  - characteristics
+    * execute in O(10)msec
+    * single character commands that can be sent at any time
+      - no CR/LF required
+    * not considered part of the streaming protocol -- independent
+      - not queued, executed sequentially
+    * tied to corrensponding input pins/buttons
+  - '$': help
+    * returns list of available commands
+      - '[HLP:$$ $# $G $I $N $x=val $Nx=line $J=line $SLP $C $X $H ~ ! ? ctrl-x]'
   - '^X' (0x18): soft-reset
     * halts and resets Grbl without power cycle
     * throws alarm if in motion as position might be lost
@@ -573,7 +577,8 @@ DOLLAR_COMMANDS = {
     'RUN_HOMING': "H",      # run homing cycle
     'JOG_COMMAND': "J",     # jog command
     'RESTORE_DATA': "RST",  # restore data
-    'SLEEP': "SLP"          # put machine into sleep mode
+    'SLEEP': "SLP",         # put machine into sleep mode
+    'HELP': ""              # print help message -- no command character, just '$'
 }
 
 DOLLAR_VIEW_COMMANDS = [s for s in DOLLAR_COMMANDS.keys() if s.startswith('VIEW')]
@@ -629,11 +634,11 @@ COMMAND_GROUP_NAMES = [v for v in dir(CommandGroups) if not v.startswith('__')]
 #
 if __name__ == '__main__':
     #### FIXME add real tests
-    alarmMsg = "ALARM:5"
+    alarmMsg = "ALARM:5"  # probe fail
     print(alarmDescription(alarmMsg))
     print(alarmDescription(alarmMsg, False))
-    print(alarmDescription("ALAR:9"))
-    errorMsg = "error:13"
+    print(alarmDescription("ALAR:9"))  # should fail
+    errorMsg = "error:13"  # check door
     print(errorDescription(errorMsg))
     print(errorDescription(errorMsg, False))
-    print(errorDescription("eror:3"))
+    print(errorDescription("eror:3"))  # should fail
