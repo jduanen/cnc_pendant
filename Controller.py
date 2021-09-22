@@ -2,11 +2,6 @@
 Object that encapsulates a USB-attached GRBL-based CNC controller.
 
 Notes:
-  * '$' command:
-    - returns help
-    - the '$' and enter are not echoed
-    - '[0-132]=value' to save Grbl setting value
-    - 'N[0-9]=line' to save startup block
   * Cycle Start, Feed Hold, and Reset realtime commands have corresponding HW buttons
 
   * types of packets that can be sent by the controller:
@@ -25,17 +20,48 @@ Notes:
     - '[OPT: ... ]': compile time options from $I query
     - '[echo: ... ]': automated line echo from pre-parsed string prior to g-code parsing
     - '>G54G20:ok': open angle bracket indicates startup line execution
+
+  * types of messages from Grbl
+    - Response Message: in response to issuing a command/query
+      * start with either 'ok' or 'error'
+    - Push Message: provide feedback on what Grbl is doing
+      * don't start with 'ok' or 'error'
+      * start with '[', '<', '$', or a specific text string
+      * can be enclosed in either '[]' or '<>' pairs
+
+  * types of commands and their response messages
+    - "dollar":
+      * issued in IDLE state
+      * expect either an 'error' or immediate response message(s), followed by a 'ok'
+        - some commands (e.g., '$$', '$G', etc.) return more than one line
+        - gather input until you get an 'ok'
+      * sending these messages can be synchronous with getting a response
+        - shouldn't have any queued messages -- maybe clean out inputs before sending
+    - realtime:
+      * issued at any time, with the machine in any in any state
+      * no CR/LF required
+      * do not return an 'ok' or an 'error' response
+      * not part of streaming protocol
+        - don't have to deal with planning buffer
+      * return messages vary:
+        - some (e.g., '?') return "<...>",
+        - others (e.g., '$') "[...]",
+        - and yet others (e.g., '!', '~') return no message
+  * Streaming requires tracking Response Messages
+    - Push Messages are not part of streaming protocol and are handled independently
 '''
 
 #### TODO implement buffer-aware streaming interface and separate realtime interface
 
 import logging
 from queue import Queue
+import time
 
 from parse import parse
 import serial
 
-from grbl import RX_BUFFER_SIZE, REALTIME_COMMANDS, DOLLAR_COMMANDS, DOLLAR_VIEW_COMMANDS
+from grbl import (RX_BUFFER_SIZE, REALTIME_COMMANDS, DOLLAR_COMMANDS,
+                  DOLLAR_VIEW_COMMANDS, alarmDescription, errorDescription)
 from Receiver import Receiver
 
 
@@ -50,6 +76,19 @@ DEF_SERIAL_DELAY = 0.1      # inter-character TX delay (secs)
 #DEF_STARTUP_CMDS = ["$H", "G21", "G90"]    # home, mm, absolute mode
 DEF_STARTUP_CMDS = []
 
+DEF_FEEDRATE = 500  # mm/min
+
+
+class PacketTypes():
+    STATUS = 0,
+    FEEDBACK = 1,
+    GCODE_STATE = 2,
+    PARAMETER = 3,
+    BUILD = 4,
+    ECHO = 5,
+    STARTUP = 6,
+    STANDARD = 7
+
 
 class Controller(Receiver):
     def __init__(self, port=DEF_PORT, baudrate=DEF_BAUDRATE, timeout=DEF_SERIAL_TIMEOUT, delay=DEF_SERIAL_DELAY):
@@ -62,6 +101,7 @@ class Controller(Receiver):
         self.maxPacketSize = 128
         self.ackQ = Queue()
         self.bufferedBytes = []
+        self.statusQ = Queue()
 
         self.serial = None
         try:
@@ -79,9 +119,9 @@ class Controller(Receiver):
         """Read a raw (unvalidated) input packet from the device, validate it,
             and return a tuple with the input values.
 
-          Input packets
+          ????
         """
-        assert self.open, "Port not open"
+        assert self.open, f"Serial port not open: {self.port}"
         packet = bytes([])
         prevVal = None
         while len(packet) < self.maxPacketSize:
@@ -102,56 +142,57 @@ class Controller(Receiver):
             return None
         elif packet.startswith("error:"):
             #### FIXME
-            #### TODO should use error descriptions not codes -- map the error code somewhere
-            try:
-                errorCode = int(parse("error:{num}", packet)['num'])
-            except Exception as ex:
-                logging.error(f"Invalid error message '{packet}': {ex}")
+            logging.error(f"Error: {errorDescription(packet)}")
             self.ackQ.put(True)
             return None
         elif packet.startswith("ALARM:"):
             #### FIXME
-            #### TODO should use error descriptions not codes -- map the error code somewhere
-            logging.error("Unimplemented ALARM handling")
+            logging.error(f"Alarm: {alarmDescription(packet)}")
             self.ackQ.put(True)
             return None
 
         if packet[0] == '<' and packet[-1] == '>':
-            packetType = "Status"
+            packetType = PacketTypes.STATUS
         elif packet.startswith("[MSG:") and packet[-1] == ']':
-            packetType = "Feedback"
+            packetType = PacketTypes.FEEDBACK
         elif packet.startswith("[GC:") and packet[-1] == ']':
-            packetType = "GCodeState"
+            packetType = PacketTypes.GCODE_STATE
         elif packet.startswith("[G") or packet.startswith("[TLO:") or packet.startswith("[PRB:"):
-            packetType = "Parameter"
+            packetType = PacketTypes.PARAMETER
         elif packet.startswith("[VER:") and packet[-1] == ']':
-            packetType = "Build"
+            packetType = PacketTypes.BUILD
         elif packet.startswith("[OPT:") and packet[-1] == ']':
-            packetType = "Build"
+            packetType = PacketTypes.BUILD
         elif packet.startswith("[echo:") and packet[-1] == ']':
-            packetType = "Echo"
+            packetType = PacketTypes.ECHO
         elif packet.startswith(">") and packet.endswith(":ok") == ']':
-            packetType = "Startup"
+            packetType = PacketTypes.STARTUP
         elif packet.startswith("$"):
-            packetType = "Parameter"
+            packetType = PacketTypes.PARAMETER
         else:
-            packetType = "Standard"
+            packetType = PacketTypes.STANDARD
         result = {'data': str(packet), 'type': packetType}
         logging.debug(f"Received: {result}")
         return result
 
-    #### FIXME
-    def getAllInput(self):
-        allInput = self.getInput()['data']
-        while True:
-            inLine = self.getInput(block=True, timeout=0.5)
-            if not inLine:
-                break
-            allInput += f"\n{inLine['data']}"
-        return allInput
+    def _flushInput(self):
+        #### FIXME
+        pass
 
-    def sendOutput(self, data):
-        """Send string (typically a single line) to the GRBL device's input buffer
+    def _sendCmd(self, cmd):
+        """Send a single line command to the controller
+
+          N.B. This does not consider the receive buffer behavior
+
+          Inputs:
+            cmd: ????
+        """
+        #### TODO validate the command input
+        self.serial.write(bytes(cmd + "\r\n", encoding="utf-8"))
+        self.serial.flush()
+
+    def _streamCmd(self, cmd):
+        """Send string as a single line to the GRBL device's input buffer.
 
           Remembers the number of bytes sent to the device and waits until there
            is enough space to buffer the full line before sending.
@@ -161,6 +202,9 @@ class Controller(Receiver):
           This makes the assumption that the ack corresponds to the oldest line
            size, so a lifo queue of line sizes can be used and the oldest entry
            is popped each time an ack is signalled from the device receive side.
+
+          Inputs:
+            cmd: ????
         """
         assert self.open, "Controller port not open"
         while not self.ackQ.empty():
@@ -168,7 +212,7 @@ class Controller(Receiver):
             if len(self.bufferedBytes) > 0:
                 self.bufferedBytes.pop(0)
 
-        data = data.strip() + "\r\n"
+        data = cmd.strip() + "\r\n"
         numBytes = len(data)
         while numBytes > (RX_BUFFER_SIZE - sum(self.bufferedBytes)):
             self.ackQ.get(block=True)
@@ -181,47 +225,115 @@ class Controller(Receiver):
         self.bufferedBytes.append(numBytes)
         logging.debug(f"Wrote: {data}")
 
-    def sendRealtimeCommand(self, cmdName):
-        """Send a realtime command to the controller.
+    def _getAllInputs(self):
+        """????
+        """
+        allInput = self.getInput()['data']
+        if allInput:
+            while True:
+                inLine = self.getInput(block=False, timeout=0.5)
+                if not inLine:
+                    break
+                allInput += f"\n{inLine['data']}"
+        return allInput
+
+    def receiver(self):
+        """Override base function that wraps code that reads from a comm link
+             and queues up the input.
+
+          This puts the status responses from the controller into the statusQ,
+           and all normal responses in the standard inputQ.
+
+          Loops until told to shutdown by the 'receiving' event.
+          Puts a final None value on the inputQ and indicates that its the input
+           thread is done.
+        """
+        while self.receiving.isSet():
+            inputs = self._receive()
+            if inputs and 'data' in inputs and inputs['data']:
+                isStatus = inputs['type'] == PacketTypes.STATUS
+                q = self.statusQ if isStatus else self.inputQ
+                qName = "Status" if isStatus else "Input"
+                try: 
+                    logging.debug(f"Inputs: {inputs}")
+                    q.put_nowait(inputs)
+                except Exception as ex:
+                    logging.error(f"{qName} queue full, discarding input and shutting down: {ex}")
+                    self.receiving.clear()
+        self.inputQ.put(None)
+        self.closed = True
+
+    def getStatus(self, block=True, timeout=None):
+        """Return input from the status queue.
+
+          Can optionally be a blocking call, with an optional timeout
+
+          Returns: next value from status queue, or None
+        """
+        statusVal = None
+        if block:
+            statusVal = self.statusQ.get()
+        else:
+            try:
+                statusVal = self.statusQ.get(block=True, timeout=timeout)
+            except:
+                logging.debug("No status, blocking get() timed out")
+        return statusVal
+
+    def realtimeCommand(self, cmdName):
+        """Send a realtime command to the controller and return the resulting
+          status information.
 
          Realtime commands do not occupy buffer space in the controller.
         """
         assert cmdName in REALTIME_COMMANDS.keys(), f"Command '{cmdName}' not a valid realtime command"
-        self.serial.write(bytes(REALTIME_COMMANDS[cmdName] + "\r\n"), encoding="utf-8")
-        self.serial.flush()
+        self._sendCmd(chr(REALTIME_COMMANDS[cmdName]))
 
-    def sendDollarView(self, cmdName):
+    def dollarView(self, cmdName):
         """Send a realtime "dollar" command to the controller.
 
          Realtime commands do not occupy buffer space in the controller.
         """
         assert cmdName in DOLLAR_VIEW_COMMANDS, f"Command '{cmdName}' not a valid dollar command"
-        self.serial.write(bytes('$' + DOLLAR_COMMANDS[cmdName] + "\r\n", encoding="utf-8"))
-        self.serial.flush()
+        self._sendCmd(f"${DOLLAR_COMMANDS[cmdName]}")
+        return self._getAllInputs()
 
     def killAlarmLock(self):
-        """????
+        """Send realtime command to clear alarm lock.
         """
-        #### FIXME
-        pass
+        self._sendCmd("$X")
+        res = self.getInput()
+        return res['data'] if res else None
 
     def runHomingCycle(self):
-        """????
+        """Send realtime command to start homing cycle.
         """
-        #### FIXME
-        pass
+        self._sendCmd("$H")
+        #### TODO deal with Response message(s), if any
 
-    def job(self, jogCmd):
-        """????
+    def jogIncremental(self, x=None, y=None, z=None, feedrate=DEF_FEEDRATE):
+        """Send realtime command to jog the spindle by given increment(s).
+
+          Inputs:
+            x: float that indicates the number of millimeters to move the spindle in the X axis
+            y: float that indicates the number of millimeters to move the spindle in the Y axis
+            z: float that indicates the number of millimeters to move the spindle in the Z axis
+            feedrate: int number of millimeters per minute to move the spindle along each axis
         """
-        #### FIXME
-        pass
+        #### TODO validate args
+        assert x or y or z, "Must provide at least one axis"
+        jogCmd = f"G21 G91 "
+        jogCmd += f"X{x} " if x else ""
+        jogCmd += f"Y{y} " if y else ""
+        jogCmd += f"Z{z} " if z else ""
+        self._sendCmd(f"$J={jogCmd}F{feedrate}")
+        print(f"$J={jogCmd}F{feedrate}")
 
     def shutdown(self, blocking=True):
         """????
         """
         # poke controller to elicit a response to end wait for input
-        self.sendOutput("")
+        self._sendCmd("")
         super().shutdown(blocking)
 
 
@@ -231,6 +343,13 @@ class Controller(Receiver):
 if __name__ == '__main__':
     import time
 
+    def read(c):
+        i = c.getInput()
+        while i:
+            print(f"    {i['data']}, {i['type']}")
+            i = c.getInput(block=False, timeout=0.5)
+        print("")
+
     #### FIXME add real tests
     logging.basicConfig(level="INFO",
                         format='%(asctime)s %(levelname)-8s %(message)s',
@@ -238,18 +357,66 @@ if __name__ == '__main__':
     print("Start")
     ctlr = Controller()
     ctlr.start()
-    print(f"Startup Message: {ctlr.getInput()['data']}")
-    print(f"message: {ctlr.getInput()['data']}")
+    print(f"Startup Message #1: {ctlr.getInput()['data']}")
+    print(f"Startup Message #2: {ctlr.getInput()['data']}")
     print("")
-
+ 
     for dCmd in DOLLAR_VIEW_COMMANDS:
         print(f"{dCmd}:")
-        ctlr.sendDollarView(dCmd)
-        i = ctlr.getInput()
-        while i:
-            print(f"    {i['data']}, {i['type']}")
-            i = ctlr.getInput(block=False, timeout=0.5)
+        responses = ctlr.dollarView(dCmd)
+        if not responses:
+            logging.error(f"No response from {dCmd} dollar command")
+        else:
+            print("    " + responses.replace("\n", "\n    ") + "\n")
+
+    if True:
+        print("kill alarm: ")
+        response = ctlr.killAlarmLock()
+        if not response:
+            logging.error(f"No response from kill alarm command")
+        else:
+            print("    " + response + "\n")
+
+        if False:
+            #### TMP TMP TMP
+            print("start machine (really spindle)")
+            ctlr._streamCmd("M3")
+
+        if False:
+            print("home the machine")
+            ctlr.runHomingCycle()
+            print("hit return when homing done")
+            input()
+
+    if False:
+        print("Jog X=10")
+        ctlr.jogIncremental(x=10, feedrate=10)
+        ctlr.realtimeCommand("STATUS")
+        i = ctlr.getStatus()
+        data = None
+        newData = i['data']
+        print(newData)
+        while newData != data:
+            ctlr.realtimeCommand("STATUS")
+            i = ctlr.getStatus()
+            data = newData
+            newData = i['data']
         print("")
+        '''
+        print("Jog X=10, Y=10")
+        ctlr.jogIncremental(x=10, y=10, feedrate=10)
+        ctlr.realtimeCommand("STATUS")
+        print("Jog X=10, Y=-10, Z=-10")
+        ctlr.jogIncremental(x=-10, y=-10, z=-10, feedrate=10)
+        ctlr.realtimeCommand("STATUS")
+        '''
+
+    print("turn off the spindle")
+    ctlr._streamCmd("M5")
+    print("    spindle off")
+
+    print("reset the machine")
+    ctlr.realtimeCommand("RESET")
 
     print("Shutting down")
     ctlr.shutdown()
