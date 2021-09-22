@@ -13,7 +13,7 @@ import threading
 
 from Controller import Controller
 from Host import Host
-from Pendant import Pendant, KEYMAP, INCR
+from Pendant import Pendant, KEYMAP, FN_KEYMAP, KEYNAMES_MAP, INCR
 
 
 JOG_SPEED = 500  #### FIXME
@@ -25,11 +25,14 @@ assert JOG_SPEED <= MAX_SPEED
 
 #### TODO make use of Event objects consistent with other modules
 class Processor():
-    def __init__(self, pendant, controller, host, macros={}):
+    """????
+    """
+    def __init__(self, pendant, controller, host, exitEvent, macros={}):
         assert isinstance(pendant, Pendant), f"pendant is not an instance of Pendant: {type(pendant)}"
         self.pendant = pendant
         assert isinstance(controller, Controller), f"controller is not an instance of Controller: {type(controller)}"
         self.controller = controller
+        self.exit = exitEvent
 
         self.macros = macros
         #### FIXME validate macros
@@ -61,6 +64,9 @@ class Processor():
             logging.warning("Pendant to Controller thread not running")
         if self.c2pRunning.isSet():
             self.c2pRunning.clear()
+            logging.debug("Shutting down ControllerInput")
+            self.controller.shutdown()
+            assert self.controller.isShutdown(), "Controller not shut down"
             logging.debug("Waiting for C2P thread to end")
             self.c2pThread.join()
             logging.debug("C2P thread done")
@@ -76,11 +82,7 @@ class Processor():
                 continue
             inputs = inputs['data']
             logging.debug(f"PIN: {inputs}")
-            try:
-#                print("K:", inputs['key2'], inputs['key1'])
-                key = KEYMAP[inputs['key2']][inputs['key1']]
-            except IndexError:
-                key = None
+            key = KEYMAP[inputs['key1']] if inputs['key2'] == 0 else FN_KEYMAP[inputs['key2']] if inputs['key1'] == KEYNAMES_MAP['Fn'] else None
             if key:
                 if key == "Reset":
                     logging.debug("Reset: TBD")
@@ -107,7 +109,7 @@ class Processor():
                 elif key == "S-on/off":
                     logging.debug("S-on/off: TBD")
                 elif key == "Fn":
-                    logging.debug("Fn: TBD")
+                    logging.debug("Fn")
                 elif key == "Probe-Z":
                     logging.debug("Probe-Z: TBD")
                 elif key == "Continuous":
@@ -116,6 +118,12 @@ class Processor():
                 elif key == "Step":
                     self.stepMode = True
                     logging.debug("Step: TBD")
+                elif key.startswith("Macro-10"):
+                    #### TMP TMP TMP hard-coded as shutdown key
+                    logging.debug(f"{key}: SHUTDOWN")
+                    self.exit.set()
+                    self.p2cRunning.clear()
+                    break
                 elif key.startswith("Macro-"):
                     #### FIXME lookup commands to emit in self.macros json
                     logging.debug(f"{key}: TBD")
@@ -139,10 +147,10 @@ class Processor():
         logging.debug("Starting controllerInput thread")
         self.controller.start()
         while self.c2pRunning.isSet():
+            print("wait for ctlr input")
             inputs = self.controller.getInput()
             print("CIN:", inputs)
-        self.controller.shutdown()
-        logging.debug("Exit ControllerInput")
+        logging.debug("Exited ControllerInput")
 
 
 #
@@ -163,9 +171,13 @@ if __name__ == '__main__':
     print("c")
     h = Host()
     print("h")
-    proc = Processor(p, c, h)
+    exit = threading.Event()
+    exit.clear()
+    proc = Processor(p, c, h, exit)
     print("RUN")
-    time.sleep(10)
+    while not exit.isSet():
+        print("running...")
+        time.sleep(10)
     print("SHUTTING DOWN")
     proc.shutdown()
     print("DONE")
