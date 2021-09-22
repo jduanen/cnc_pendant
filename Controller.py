@@ -278,7 +278,7 @@ class Controller(Receiver):
                 statusVal = self.statusQ.get(block=True, timeout=timeout)
             except:
                 logging.debug("No status, blocking get() timed out")
-        return statusVal
+        return statusVal['data']
 
     def realtimeCommand(self, cmdName):
         """Send a realtime command to the controller and return the resulting
@@ -343,11 +343,30 @@ class Controller(Receiver):
 if __name__ == '__main__':
     import time
 
-    def read(c):
-        i = c.getInput()
-        while i:
-            print(f"    {i['data']}, {i['type']}")
-            i = c.getInput(block=False, timeout=0.5)
+    def track(c):
+        status = None
+        newStatus = c.getStatus()
+        print(newStatus)
+        while newStatus != status:
+            status = newStatus
+            c.realtimeCommand("STATUS")
+            newStatus = c.getStatus()
+            print(newStatus)
+            time.sleep(0.25)
+        print("")
+
+    def _getStatus(c):
+        c.realtimeCommand("STATUS")
+        return c.getStatus()
+
+    def jogTrack(c):
+        status = _getStatus(c)
+        while not status.startswith("<Jog"):
+            status = _getStatus(c)
+        while status.startswith("<Jog"):
+            status = _getStatus(c)
+            print(status)
+            time.sleep(0.25)
         print("")
 
     #### FIXME add real tests
@@ -377,39 +396,31 @@ if __name__ == '__main__':
         else:
             print("    " + response + "\n")
 
-        if False:
+        if True:
             #### TMP TMP TMP
             print("start machine (really spindle)")
             ctlr._streamCmd("M3")
+            print("spindle started")
+            time.sleep(5)
 
-        if False:
+        if True:
             print("home the machine")
             ctlr.runHomingCycle()
             print("hit return when homing done")
             input()
 
-    if False:
+    if True:
         print("Jog X=10")
-        ctlr.jogIncremental(x=10, feedrate=10)
-        ctlr.realtimeCommand("STATUS")
-        i = ctlr.getStatus()
-        data = None
-        newData = i['data']
-        print(newData)
-        while newData != data:
-            ctlr.realtimeCommand("STATUS")
-            i = ctlr.getStatus()
-            data = newData
-            newData = i['data']
-        print("")
-        '''
-        print("Jog X=10, Y=10")
-        ctlr.jogIncremental(x=10, y=10, feedrate=10)
-        ctlr.realtimeCommand("STATUS")
+        ctlr.jogIncremental(x=10, feedrate=500)
+        jogTrack(ctlr)
+
+        print("Jog X=-10, Y=10")
+        ctlr.jogIncremental(x=-10, y=10, feedrate=500)
+        jogTrack(ctlr)
+
         print("Jog X=10, Y=-10, Z=-10")
-        ctlr.jogIncremental(x=-10, y=-10, z=-10, feedrate=10)
-        ctlr.realtimeCommand("STATUS")
-        '''
+        ctlr.jogIncremental(x=10, y=-10, z=-10, feedrate=500)
+        jogTrack(ctlr)
 
     print("turn off the spindle")
     ctlr._streamCmd("M5")
