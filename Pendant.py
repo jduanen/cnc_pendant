@@ -20,23 +20,11 @@ from Receiver import Receiver
 
 INPUT_FIELDS = ("hdr", "seed", "key1", "key2", "incr", "axis", "jog", "chksm")
 
-# keycap name to key code
-KEYNAMES = {
+# keycap name to key code map
+KEYNAMES_MAP = {
     "Reset": 0x01,
     "Stop": 0x02,
     "StartPause": 0x03,
-    "Feed+": 0x04,
-    "Feed-": 0x05,
-    "Spindle+": 0x06,
-    "Spindle-": 0x07,
-    "M-Home": 0x08,
-    "Safe-Z": 0x09,
-    "W-Home": 0x0a,
-    "S-on/off": 0x0b,
-    "Fn": 0x0c,
-    "Probe-Z": 0x0d,
-    "Continuous": 0x0e,
-    "Step": 0x0f,
     "Macro-1": 0x04,
     "Macro-2": 0x05,
     "Macro-3": 0x06,
@@ -45,49 +33,61 @@ KEYNAMES = {
     "Macro-6": 0x09,
     "Macro-7": 0x0a,
     "Macro-8": 0x0b,
+    "Fn": 0x0c,
     "Macro-9": 0x0d,
     "Macro-10": 0x10,
+    "Feed+": 0x04,
+    "Feed-": 0x05,
+    "Spindle+": 0x06,
+    "Spindle-": 0x07,
+    "M-Home": 0x08,
+    "Safe-Z": 0x09,
+    "W-Home": 0x0a,
+    "S-on/off": 0x0b,
+    "Probe-Z": 0x0d,
+    "Continuous": 0x0e,
+    "Step": 0x0f,
 }
 
-KEYMAP = {
-    0x00: [
-        None,
-        "Reset",
-        "Stop",
-        "StartPause",
-        "Feed+",
-        "Feed-",
-        "Spindle+",
-        "Spindle-",
-        "M-Home",
-        "Safe-Z",
-        "W-Home",
-        "S-on/off",
-        "Fn",
-        "Probe-Z",
-        "Continuous",
-        "Step"
-    ],
-    0x0c: [
-        None,
-        None,
-        None,
-        None,
-        "Macro-1",
-        "Macro-2",
-        "Macro-3",
-        "Macro-4",
-        "Macro-5",
-        "Macro-6",
-        "Macro-7",
-        "Macro-8",
-        None,
-        "Macro-9",
-        None,
-        None,
-        "Macro-10"
-    ]
-}
+KEYMAP = (
+    None,
+    "Reset",
+    "Stop",
+    "StartPause",
+    "Macro-1",
+    "Macro-2",
+    "Macro-3",
+    "Macro-4",
+    "Macro-5",
+    "Macro-6",
+    "Macro-7",
+    "Macro-8",
+    "Fn",
+    "Macro-9",
+    None,
+    None,
+    "Macro-10",
+    "Continuous",
+    "Step"
+)
+
+FN_KEYMAP = (
+    None,
+    None,
+    None,
+    None,
+    "Feed+",
+    "Feed-",
+    "Spindle+",
+    "Spindle-",
+    "M-Home",
+    "Safe-Z",
+    "W-Home",
+    "S-on/off",
+    "Probe-Z",
+    "Continuous",
+    "Step"
+)
 
 AXIS = {
     0x00: "Noop",
@@ -145,8 +145,8 @@ class Pendant(Receiver):
     NULL_INPUT_PACKET = bytes([0x06, 0, 0, 0, 0, 0, 0, 0])
 
     MODE_MAP = {
-        KEYNAMES['Continuous']: MotionMode.CONT,
-        KEYNAMES['Step']: MotionMode.STEP
+        KEYNAMES_MAP['Continuous']: MotionMode.CONT,
+        KEYNAMES_MAP['Step']: MotionMode.STEP
     }
 
     @staticmethod
