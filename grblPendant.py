@@ -9,6 +9,7 @@ import logging
 import os
 import signal
 import sys
+import threading
 import time
 import yaml
 from yaml import Loader
@@ -50,10 +51,13 @@ def run(options):
     pend = Pendant()
     ctlr = Controller()
     host = Host()
-    proc = Processor(pend, ctlr, host, macros)
+    exit = threading.Event()
+    exit.clear()
+    proc = Processor(pend, ctlr, host, exit, macros)
     print("PROC START")
-    while True:
-        time.sleep(1000)
+    while not exit.isSet():
+        print("running...")
+        time.sleep(30)
     print("DONE DONE")
 
 
