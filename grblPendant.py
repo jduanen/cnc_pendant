@@ -25,10 +25,27 @@ DEFAULTS = {
     'macroPath': "./whb04b.yml"
 }
 
-
 def run(options):
     """????
     """
+    def stop():
+        logging.debug("Shutting down Processor")
+        proc.shutdown()
+        logging.debug("Shutting down Host")
+        host.shutdown(False)
+        logging.debug("Shutting down Controller")
+        ctlr.shutdown()
+        logging.debug("Shutting down Pendant")
+        pend.shutdown()
+
+    def handler(signum, frame):
+        logging.debug(f"Caught signal: {signum}")
+        stop()
+
+    for s in ('TERM', 'HUP', 'INT'):
+        sig = getattr(signal, 'SIG'+s)
+        signal.signal(sig, handler)
+
     macros = {}
     with open(options.macroPath, "r") as f:
         macros = yaml.load(f, Loader=Loader)
@@ -36,29 +53,16 @@ def run(options):
     json.dump(macros, sys.stdout, indent=4, sort_keys=True)
     print("")
 
-    '''
-    interrupted = False
-    def handler(signum, frame):
-        logging.debug(f"Caught signal: {signum}")
-        interrupted = True
-        p.shutdown()
-
-    #### TODO do graceful shutdown on signal
-    for s in (): #### ('TERM', 'HUP', 'INT'):
-        sig = getattr(signal, 'SIG'+s)
-        signal.signal(sig, handler)
-    '''
     pend = Pendant()
     ctlr = Controller()
     host = Host()
-    exit = threading.Event()
-    exit.clear()
-    proc = Processor(pend, ctlr, host, exit, macros)
-    print("PROC START")
-    while not exit.isSet():
+    proc = Processor(pend, ctlr, host, macros)
+    while proc.isAlive():
+        #### FIXME do something here
         print("running...")
         time.sleep(30)
-    print("DONE DONE")
+    stop()
+    sys.exit(0)
 
 
 def getOpts():
