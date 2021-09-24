@@ -11,6 +11,8 @@ Fires up a pair of threads -- one for taking input from the pendant, updating
 import logging
 import threading
 
+from parse import parse
+
 from Controller import Controller
 from Host import Host
 from Pendant import Pendant, KEYMAP, FN_KEYMAP, KEYNAMES_MAP, INCR
@@ -19,40 +21,138 @@ from Pendant import Pendant, KEYMAP, FN_KEYMAP, KEYNAMES_MAP, INCR
 JOG_SPEED = 500  #### FIXME
 MAX_SPEED = 1000  #### FIXME
 
+MAX_NUM_MACROS = 9  # N.B. temporarily reserving one for exit command
+
+STATUS_POLL_INTERVAL = 0.5
+
 
 assert JOG_SPEED <= MAX_SPEED
+
+
+#### TODO add another thread for "controllerStatus()" -- update display with information
+#### TODO add a thread to issue status queries during jog -- maybe use the Controller thread and jog tracking?
+
+
+class ControllerInput(threading.Thread):
+    """????
+      <gets inputs from controller and does something with them>
+    """
+    def __init__(self, runningEvent, controller):
+        self.p2cRunning = runningEvent
+        self.ctlr = controller
+        super().__init__()
+
+    def run(self):
+        logging.debug("Starting controllerInput thread")
+        self.ctlr.start()
+        while self.p2cRunning.isSet():
+            print("wait for ctlr input")
+            inputs = self.ctlr.getInput()
+            print("CIN:", inputs)
+            #### TODO if type 7 or 1, reset the display
+        logging.debug("Exited ControllerInput")
+
+
+class ControllerStatus(threading.Thread):
+    """????
+      <gets status from controller and updates the pendant display>
+    """
+    def __init__(self, runningEvent, controller):
+        self.p2cRunning = runningEvent
+        self.ctlr = controller
+        super().__init__()
+
+    def run(self):
+        logging.debug("Starting controllerStatus thread")
+        self.ctlr.start()
+        while self.p2cRunning.isSet():
+            print("wait for ctlr status")
+            status = self.ctlr.getStatus()
+            print("CS:", status)
+        logging.debug("Exited ControllerStatus")
+
+
+class StatusThread(threading.Thread):
+    """????
+    """
+    def __init__(self, runningEvent, controller):
+        self.p2cRunning = runningEvent
+        self.ctlr = controller
+        super().__init__()
+
+    def run(self):
+        while not self.p2cRunning.wait(STATUS_POLL_INTERVAL):
+            logging.debug("StatusThread: Poll Status")
+            ctlr.realtimeCommand("STATUS")
 
 
 #### TODO make use of Event objects consistent with other modules
 class Processor():
     """????
     """
-    def __init__(self, pendant, controller, host, exitEvent, macros={}):
+    def __init__(self, pendant, controller, host, macros=[]):
         assert isinstance(pendant, Pendant), f"pendant is not an instance of Pendant: {type(pendant)}"
         self.pendant = pendant
         assert isinstance(controller, Controller), f"controller is not an instance of Controller: {type(controller)}"
         self.controller = controller
-        self.exit = exitEvent
 
+        self.spindleState = False
+        self.stepMode = None  #### FIXME use startup default value
+
+        def dollarViewClosure(cmdName):
+            def closure():
+                return controller.dollarView(cmdName)
+            return closure
+
+        #### TODO add more magic commands
+        self.magicCommands = {
+            'VIEW_SETTINGS': dollarViewClosure('VIEW_SETTINGS'),
+            'VIEW_PARAMETERS': dollarViewClosure('VIEW_PARAMETERS'),
+            'VIEW_PARSER': dollarViewClosure('VIEW_PARSER'),
+            'VIEW_BUILD': dollarViewClosure('VIEW_BUILD'),
+            'VIEW_STARTUPS': dollarViewClosure('VIEW_STARTUPS'),
+            'HELP': dollarViewClosure('HELP')
+        }
+
+        assert isinstance(macros, list), f"Invalid macros -- must be list of dicts: {macros}"
+        assert len(macros) < MAX_NUM_MACROS, f"Invalid macros -- too many definitions, must be less than {MAX_NUM_MACROS}"
+        assert all(['commands' in m.keys() and 'description' in m.keys() for m in macros]), f"Invalid macros -- each definition must have 'commands' and 'description' keys"
+
+        #### TODO convert all before and after fields to lists
+        for m in macros:
+            m.update((k, v.split()) for k, v in m.items() if k in ('before', 'after') and isinstance(v, str))
         self.macros = macros
-        #### FIXME validate macros
+        #### TODO validate magic commands in before and after fields
+        #assert cmd in MAGIC_COMMANDS, f"Invalid magic command: {cmd}"
 
-        self.stepMode = None  #### FIXME deal with startup default value
+        #### TODO validate macros -- turn off motion and run through grbl to see if good
 
         self.p2cRunning = threading.Event()
+        self.p2cRunning.set()
         self.p2cThread = threading.Thread(target=self.pendantInput, name="p2c")
-#        self.p2cThread.daemon = True
 
         self.c2pRunning = threading.Event()
-        self.c2pThread = threading.Thread(target=self.controllerInput, name="c2p")
-#        self.c2pThread.daemon = True
+        self.c2pRunning.set()
+        self.c2piThread = ControllerInput(self.c2pRunning, self.controller)
+        self.c2psThread = ControllerStatus(self.c2pRunning, self.controller)
+
+        self.statusRunning = threading.Event()
+        self.statusRunning.set()
+        self.statusThread = StatusThread(self.statusRunning, self.controller)
+
+        self.p2cThread.start()
+        self.c2piThread.start()
+        self.c2psThread.start()
+        self.statusThread.start()
 
         #### TODO hook up the host
 
-        self.p2cRunning.set()
-        self.p2cThread.start()
-        self.c2pRunning.set()
-        self.c2pThread.start()
+    def _executeMagic(self, commands):
+        for cmd in commands:
+            pass  #### FIXME
+
+    def magicCommandNames(self):
+        return list(self.magicCommands.keys())
 
     def shutdown(self):
         if self.p2cRunning.isSet():
@@ -67,11 +167,17 @@ class Processor():
             logging.debug("Shutting down ControllerInput")
             self.controller.shutdown()
             assert self.controller.isShutdown(), "Controller not shut down"
-            logging.debug("Waiting for C2P thread to end")
-            self.c2pThread.join()
-            logging.debug("C2P thread done")
+            logging.debug("Waiting for C2P threads to end")
+            self.c2piThread.join()
+            self.c2psThread.join()
+            logging.debug("C2P threads done")
         else:
             logging.warning("Controller to Pendant thread not running")
+
+    def isAlive(self):
+        """????
+        """
+        return self.p2cThread.is_alive()
 
     def pendantInput(self):
         logging.debug("Starting pendantInput thread")
@@ -85,17 +191,23 @@ class Processor():
             key = KEYMAP[inputs['key1']] if inputs['key2'] == 0 else FN_KEYMAP[inputs['key2']] if inputs['key1'] == KEYNAMES_MAP['Fn'] else None
             if key:
                 if key == "Reset":
-                    logging.debug("Reset: TBD")
+                    logging.debug("Reset and unlock GRBL")
+                    self.controller.realtimeCommand("RESET")
+                    self.controller.killAlarmLock()
                 elif key == "Stop":
-                    logging.debug("Stop: TBD")
+                    logging.debug("Stop: feed hold")
+                    self.controller.realtimeCommand("FEED_HOLD")
                 elif key == "StartPause":
-                    logging.debug("StartPause: TBD")
+                    logging.debug("StartPause: cycle start")
+                    self.controller.realtimeCommand("CYCLE_START")
                 elif key.startswith("Feed"):
+                    #### FIXME select 100/10/1 increment based on feed switch setting
                     if key == "Feed+":
                         logging.debug("Feed+: TBD")
                     elif key == "Feed-":
                         logging.debug("Feed-: TBD")
                 elif key.startswith("Spindle"):
+                    #### FIXME select 100/10/1 increment based on feed switch setting
                     if key == "Spindle+":
                         logging.debug("Spindle+: TBD")
                     if key == "Spindle-":
@@ -107,7 +219,14 @@ class Processor():
                 elif key == "W-Home":
                     logging.debug("W-Home: TBD")
                 elif key == "S-on/off":
-                    logging.debug("S-on/off: TBD")
+                    if self.spindleState:
+                        logging.debug(f"Spindle: off")
+                        self.spindleState = False
+                        self.controller.streamCmd("M5")
+                    else:
+                        logging.debug(f"Spindle: on")
+                        self.spindleState = True
+                        self.controller.streamCmd("M3")
                 elif key == "Fn":
                     logging.debug("Fn")
                 elif key == "Probe-Z":
@@ -121,14 +240,29 @@ class Processor():
                 elif key.startswith("Macro-10"):
                     #### TMP TMP TMP hard-coded as shutdown key
                     logging.debug(f"{key}: SHUTDOWN")
-                    self.exit.set()
                     self.p2cRunning.clear()
                     break
                 elif key.startswith("Macro-"):
-                    #### FIXME lookup commands to emit in self.macros json
-                    logging.debug(f"{key}: TBD")
+                    res = parse("Macro-{num:d}", key)
+                    if res:
+                        num = res['num'] - 1
+                        if num >= len(self.macros):
+                            logging.error(f"Undefined macro #{num}")
+                        else:
+                            logging.debug(f"Macro #{num}: {self.macros[num]['description']}")
+                            magic = self.macros[num]['before'] if 'before' in self.macros[num] else []
+                            res = self._executeMagic(magic)
+                            logging.info(f"Before Magic Commands: {magic}\n{res}")
+                            if self.macros[num]['commands']:
+                                self.controller.streamCmd(self.macros[num]['commands'])
+                            magic = self.macros[num]['after'] if 'after' in self.macros[num] else []
+                            res = self._executeMagic(magic)
+                            logging.info(f"After Magic Commands: {magic}\n{res}")
+                    else:
+                        logging.error(f"Failed to parse Macro number: {key}")
                 else:
                     logging.warning(f"Unimplemented Key: {key}")
+####                self.controller.realtimeCommand("STATUS")
 
             if inputs['jog']:
                 incr = INCR['Step' if self.stepMode else 'Continuous'][inputs['incr']]
@@ -142,15 +276,6 @@ class Processor():
                 logging.debug(f"Jog {distance} @ {speed}")
         self.pendant.shutdown()
         logging.debug("Exit PendantInput")
-
-    def controllerInput(self):
-        logging.debug("Starting controllerInput thread")
-        self.controller.start()
-        while self.c2pRunning.isSet():
-            print("wait for ctlr input")
-            inputs = self.controller.getInput()
-            print("CIN:", inputs)
-        logging.debug("Exited ControllerInput")
 
 
 #
@@ -171,11 +296,9 @@ if __name__ == '__main__':
     print("c")
     h = Host()
     print("h")
-    exit = threading.Event()
-    exit.clear()
-    proc = Processor(p, c, h, exit)
+    proc = Processor(p, c, h)
     print("RUN")
-    while not exit.isSet():
+    while proc.isAlive():
         print("running...")
         time.sleep(10)
     print("SHUTTING DOWN")
