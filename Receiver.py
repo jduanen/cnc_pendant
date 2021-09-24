@@ -29,9 +29,12 @@ class Receiver():
         self.shutdown()
 
     def start(self):
-        self.receiving.set()
-        self.receiverThread.start()
-        logging.debug(f"Starting thread: {self.receiverThread.name}")
+        if self.receiving.isSet():
+            logging.debug(f"Thread '{self.receiverThread.name}' already running")
+        else:
+            self.receiving.set()
+            self.receiverThread.start()
+            logging.debug(f"Starting thread: {self.receiverThread.name}")
 
     def shutdown(self, blocking=True):
         """Tell input thread to shutdown.
