@@ -80,17 +80,23 @@ DEF_FEEDRATE = 500  # mm/min
 
 
 class PacketTypes():
-    STATUS = 0,
-    FEEDBACK = 1,
-    GCODE_STATE = 2,
-    PARAMETER = 3,
-    BUILD = 4,
-    ECHO = 5,
-    STARTUP = 6,
+    STATUS = 0
+    FEEDBACK = 1
+    GCODE_STATE = 2
+    PARAMETER = 3
+    BUILD = 4
+    ECHO = 5
+    STARTUP = 6
     STANDARD = 7
 
 
 class Controller(Receiver):
+    """????
+
+      N.B. The act of connecting to the USB port on the Controller resets Grbl.
+        This means that the Controller is always reset when this type of object
+        is instantiated.
+    """
     def __init__(self, port=DEF_PORT, baudrate=DEF_BAUDRATE, timeout=DEF_SERIAL_TIMEOUT, delay=DEF_SERIAL_DELAY):
         self.port = port
         self.baudrate = baudrate
@@ -191,7 +197,7 @@ class Controller(Receiver):
         self.serial.write(bytes(cmd + "\r\n", encoding="utf-8"))
         self.serial.flush()
 
-    def _streamCmd(self, cmd):
+    def streamCmd(self, cmd):
         """Send string as a single line to the GRBL device's input buffer.
 
           Remembers the number of bytes sent to the device and waits until there
@@ -332,7 +338,8 @@ class Controller(Receiver):
     def shutdown(self, blocking=True):
         """????
         """
-        # poke controller to elicit a response to end wait for input
+        # poke controller to elicit both a message and status response to end wait for input
+        self._sendCmd("?")
         self._sendCmd("$")
         super().shutdown(blocking)
 
@@ -399,17 +406,17 @@ if __name__ == '__main__':
         if True:
             #### TMP TMP TMP
             print("start machine (really spindle)")
-            ctlr._streamCmd("M3")
+            ctlr.streamCmd("M3")
             print("spindle started")
             time.sleep(5)
 
-        if True:
+        if False:
             print("home the machine")
             ctlr.runHomingCycle()
             print("hit return when homing done")
             input()
 
-    if True:
+    if False:
         print("Jog X=10")
         ctlr.jogIncremental(x=10, feedrate=500)
         jogTrack(ctlr)
@@ -423,11 +430,16 @@ if __name__ == '__main__':
         jogTrack(ctlr)
 
     print("turn off the spindle")
-    ctlr._streamCmd("M5")
+    ctlr.streamCmd("M5")
     print("    spindle off")
 
     print("reset the machine")
     ctlr.realtimeCommand("RESET")
+    response = ctlr._getAllInputs()
+    if not response:
+        logging.error(f"No response from reset command")
+    else:
+        print("    " + response + "\n")
 
     print("Shutting down")
     ctlr.shutdown()
