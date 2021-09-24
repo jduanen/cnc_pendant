@@ -10,10 +10,10 @@ import hid
 from Receiver import Receiver
 
 
+#### FIXME implement this
 class Host(Receiver):
     def __init__(self):
-        pass
-
+        super().__init__(name="Pendant")
 
 
 #
