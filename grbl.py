@@ -588,10 +588,10 @@ def alarmDescription(msg, full=True):
     """Take a raw Alarm message from the controller and return its description.
     """
     description = None
-    res = parse("ALARM:{num}", msg)
+    res = parse("ALARM:{num:d}", msg)
     if res:
         try:
-            description = ALARM_CODES[int(res['num'])][1 if full else 0]
+            description = ALARM_CODES[res['num']][1 if full else 0]
         except IndexError:
             pass
     return description
@@ -600,10 +600,10 @@ def errorDescription(msg, full=True):
     """Take a raw Error message from the controller and return its description.
     """
     description = None
-    res = parse("error:{num}", msg)
+    res = parse("error:{num:d}", msg)
     if res:
         try:
-            description = ERROR_CODES[int(res['num'])][1 if full else 0]
+            description = ERROR_CODES[res['num']][1 if full else 0]
         except IndexError:
             pass
     return description
