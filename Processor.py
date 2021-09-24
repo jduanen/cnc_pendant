@@ -38,14 +38,14 @@ class ControllerInput(threading.Thread):
       <gets inputs from controller and does something with them>
     """
     def __init__(self, runningEvent, controller):
-        self.p2cRunning = runningEvent
+        self.running = runningEvent
         self.ctlr = controller
         super().__init__()
 
     def run(self):
         logging.debug("Starting controllerInput thread")
         self.ctlr.start()
-        while self.p2cRunning.isSet():
+        while self.running.isSet():
             print("wait for ctlr input")
             inputs = self.ctlr.getInput()
             print("CIN:", inputs)
@@ -58,32 +58,32 @@ class ControllerStatus(threading.Thread):
       <gets status from controller and updates the pendant display>
     """
     def __init__(self, runningEvent, controller):
-        self.p2cRunning = runningEvent
+        self.running = runningEvent
         self.ctlr = controller
         super().__init__()
 
     def run(self):
         logging.debug("Starting controllerStatus thread")
         self.ctlr.start()
-        while self.p2cRunning.isSet():
-            print("wait for ctlr status")
+        while self.running.isSet():
             status = self.ctlr.getStatus()
-            print("CS:", status)
+            #### TODO update Pendant display
         logging.debug("Exited ControllerStatus")
 
 
-class StatusThread(threading.Thread):
+class StatusPolling(threading.Thread):
     """????
     """
-    def __init__(self, runningEvent, controller):
-        self.p2cRunning = runningEvent
+    def __init__(self, stopEvent, controller):
+        self.stop = stopEvent
         self.ctlr = controller
         super().__init__()
 
     def run(self):
-        while not self.p2cRunning.wait(STATUS_POLL_INTERVAL):
-            logging.debug("StatusThread: Poll Status")
-            ctlr.realtimeCommand("STATUS")
+        logging.debug("Starting StatusPolling Thread")
+        while not self.stop.wait(STATUS_POLL_INTERVAL):
+            logging.debug("StatusPolling: Poll Status")
+            self.ctlr.realtimeCommand("STATUS")
 
 
 #### TODO make use of Event objects consistent with other modules
@@ -136,9 +136,9 @@ class Processor():
         self.c2piThread = ControllerInput(self.c2pRunning, self.controller)
         self.c2psThread = ControllerStatus(self.c2pRunning, self.controller)
 
-        self.statusRunning = threading.Event()
-        self.statusRunning.set()
-        self.statusThread = StatusThread(self.statusRunning, self.controller)
+        self.statusStop = threading.Event()
+        self.statusStop.clear()
+        self.statusThread = StatusPolling(self.statusStop, self.controller)
 
         self.p2cThread.start()
         self.c2piThread.start()
@@ -155,6 +155,13 @@ class Processor():
         return list(self.magicCommands.keys())
 
     def shutdown(self):
+        if self.statusStop.isSet():
+            logging.warning("ControllerStatus thread not running")
+        else:
+            self.statusStop.set()
+            logging.debug("Waiting for ControllerStatus thread to end")
+            self.statusThread.join()
+            logging.debug("ControllerStatus thread done")
         if self.p2cRunning.isSet():
             self.p2cRunning.clear()
             logging.debug("Waiting for P2C thread to end")
