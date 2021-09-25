@@ -178,7 +178,7 @@ class Controller(Receiver):
         else:
             packetType = PacketTypes.STANDARD
         result = {'data': str(packet), 'type': packetType}
-        logging.debug(f"Received: {result}")
+        logging.debug(f"Controller Received: {result}")
         return result
 
     def _flushInput(self):
@@ -261,7 +261,7 @@ class Controller(Receiver):
                 q = self.statusQ if isStatus else self.inputQ
                 qName = "Status" if isStatus else "Input"
                 try: 
-                    logging.debug(f"Inputs: {inputs}")
+                    logging.debug(f"Controller Inputs: {inputs}")
                     q.put_nowait(inputs)
                 except Exception as ex:
                     logging.error(f"{qName} queue full, discarding input and shutting down: {ex}")
