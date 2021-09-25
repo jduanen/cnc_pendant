@@ -29,14 +29,19 @@ def run(options):
     """????
     """
     def stop():
-        logging.debug("Shutting down Processor")
-        proc.shutdown()
-        logging.debug("Shutting down Host")
-        host.shutdown(False)
-        logging.debug("Shutting down Controller")
-        ctlr.shutdown()
-        logging.debug("Shutting down Pendant")
-        pend.shutdown()
+        logging.debug(f"Active Threads: {threading.enumerate()}")
+        if proc:
+            logging.debug("Shutting down Processor")
+            proc.shutdown()
+        if host:
+            logging.debug("Shutting down Host")
+            host.shutdown(False)
+        if ctlr:
+            logging.debug("Shutting down Controller")
+            ctlr.shutdown()
+        if pend:
+            logging.debug("Shutting down Pendant")
+            pend.shutdown()
 
     def handler(signum, frame):
         logging.debug(f"Caught signal: {signum}")
@@ -57,10 +62,11 @@ def run(options):
     ctlr = Controller()
     host = Host()
     proc = Processor(pend, ctlr, host, macros)
-    while proc.isAlive():
-        #### FIXME do something here
-        print("running...")
-        time.sleep(30)
+    if proc:
+        while proc.isAlive():
+            #### FIXME do something here
+            print("running...")
+            time.sleep(30)
     stop()
     sys.exit(0)
 
