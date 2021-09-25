@@ -73,7 +73,7 @@ KEYMAP = (
 
 FN_KEYMAP = (
     None,
-    None,
+    "PendantReset",  # N.B. my definition
     None,
     None,
     "Feed+",
@@ -100,29 +100,6 @@ AXIS = {
     0x16: "C",
 }
 
-INCR = {
-    'Step': {
-        0x00: None,
-        0x0d: 0.001,
-        0x0e: 0.01,
-        0x0f: 0.1,
-        0x10: 1.0,
-        0x1a: 5.0,
-        0x1b: 10.0,
-        0x9b: "Lead"
-    },
-    'Continuous': {
-        0x00: None,
-        0x0d: .02,
-        0x0e: .05,
-        0x0f: .10,
-        0x10: .30,
-        0x1a: .60,
-        0x1b: 1.0,
-        0x9b: "Lead"
-    }
-}
-
 
 class MotionMode():
     CONT = 0x00
@@ -147,6 +124,29 @@ class Pendant(Receiver):
     MODE_MAP = {
         KEYNAMES_MAP['Continuous']: MotionMode.CONT,
         KEYNAMES_MAP['Step']: MotionMode.STEP
+    }
+
+    INCR = {
+        MotionMode.STEP: {
+            0x00: None,
+            0x0d: 0.001,
+            0x0e: 0.01,
+            0x0f: 0.1,
+            0x10: 1.0,
+            0x1a: 5.0,
+            0x1b: 10.0,
+            0x9b: "Lead"
+        },
+        MotionMode.CONT: {
+            0x00: None,
+            0x0d: .02,
+            0x0e: .05,
+            0x0f: .10,
+            0x10: .30,
+            0x1a: .60,
+            0x1b: 1.0,
+            0x9b: "Lead"
+        }
     }
 
     @staticmethod
@@ -195,28 +195,11 @@ class Pendant(Receiver):
         if self.device.manufacturer != 'KTURT.LTD':
             raise Exception(f"Invalid pendent receiver device: {self.device.manufacturer}")
         super().__init__(name="Pendant")
-        self._reset()
 
-    def _reset(self):
-        """Issue command to bring pendant out of reset
-
-          Set the RESET flag (leave other flags 0), then wait for motion mode
-           button to be pressed (ignore other inputs), then clear RESET flag
-           and set display to the current values.
-
-          This approach allows pendant to power up/down without forcing a reset
-           of the machine.
-
-          N.B. The coordinate display values are retained across power cycle
-           events, and stay until updated by inputs from the Controller.
-        """
+        # N.B. The coordinate display values are retained across power cycle
+        #      events, and stay until updated by inputs from the Controller.
         self.sendOutput(Pendant._makeDisplayCommand(reset=1))
-        while True:
-            inputVals = self._receive()['data']
-            if inputVals and inputVals['key2'] == 0x00 and inputVals['key1'] in Pendant.MODE_MAP.keys():
-                break
-        self.sendOutput(Pendant._makeDisplayCommand(motionMode=Pendant.MODE_MAP[inputVals['key1']]))
-        logging.info("Reset receiver")
+        logging.debug("Reset receiver")
 
     def _flushInput(self):
         inp = self._rawInputPacket()
@@ -269,6 +252,16 @@ class Pendant(Receiver):
             logging.debug(f"dispPkt[{i}]: {[hex(x) for x in dispPkt]}")
             i += 1
             #### TODO consider a delay here
+
+    def updateDisplay(self, motionMode, coordinateSpace, coordinates, feedrate, spindleSpeed):
+        """????
+        """
+        print("XXXX", motionMode, coordinateSpace, coordinates, feedrate, spindleSpeed)
+        self.sendOutput(Pendant._makeDisplayCommand(motionMode,
+                                                    coordinateSpace,
+                                                    *coordinates,
+                                                    feedrate,
+                                                    spindleSpeed))
 
 
 #
