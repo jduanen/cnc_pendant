@@ -1,1 +1,1 @@
-ATTR{idProduct}=="eb93", ATTR{idVendor}=="10ce", MODE="0666", OWNER="root", GROUP="plugdev"
+ATTRS{idProduct}=="eb93", ATTRS{idVendor}=="10ce", MODE="0666", OWNER="root", GROUP="plugdev"
