@@ -43,20 +43,37 @@ def run(options):
             logging.debug("Shutting down Pendant")
             pend.shutdown()
 
-    def handler(signum, frame):
+    def shutdownHandler(signum, frame):
         logging.debug(f"Caught signal: {signum}")
         stop()
 
     for s in ('TERM', 'HUP', 'INT'):
         sig = getattr(signal, 'SIG'+s)
-        signal.signal(sig, handler)
+        signal.signal(sig, shutdownHandler)
+
+    def reloadHandler(signum, frame):
+        logging.debug(f"Caught signal: {signum}")
+        macros = {}
+        if os.path.exists(options.macroPath):
+            with open(options.macroPath, "r") as f:
+                macros = yaml.load(f, Loader=Loader)
+            proc.defineMacros(macros)
+            if options.verbose:
+                print("Reload Macros:")
+                json.dump(macros, sys.stdout, indent=4, sort_keys=True)
+                print("")
+        else:
+            logging.warning(f"Macros file '{options.macroPath}' does not exist")
+
+    signal.signal(signal.SIGUSR1, reloadHandler)
 
     macros = {}
     with open(options.macroPath, "r") as f:
         macros = yaml.load(f, Loader=Loader)
-    print("Macros:")
-    json.dump(macros, sys.stdout, indent=4, sort_keys=True)
-    print("")
+    if options.verbose:
+        print("Initial Macros:")
+        json.dump(macros, sys.stdout, indent=4, sort_keys=True)
+        print("")
 
     pend = Pendant()
     ctlr = Controller()
