@@ -64,18 +64,16 @@ KEYMAP = (
     "Macro-8",
     "Fn",
     "Macro-9",
-    None,
-    None,
-    "Macro-10",
     "Continuous",
-    "Step"
+    "Step",
+    "Macro-10"
 )
 
 FN_KEYMAP = (
     None,
-    "PendantReset",  # N.B. my definition
-    None,
-    None,
+    "PendantReset",     # N.B. my definition
+    "ApplicationExit",  # N.B. my definition
+    "StartPause",
     "Feed+",
     "Feed-",
     "Spindle+",
@@ -84,7 +82,9 @@ FN_KEYMAP = (
     "Safe-Z",
     "W-Home",
     "S-on/off",
+    None,
     "Probe-Z",
+    None,
     "Continuous",
     "Step"
 )
@@ -101,21 +101,30 @@ AXIS = {
 }
 
 
+class AxisMode():
+    OFF = 0
+    XYZ = 1
+    ABC = 2
+
+
 class MotionMode():
-    CONT = 0x00
-    STEP = 0x01
-    MPG = 0x02
-    PCT = 0x03
+    CONT = 0x00  # Continuous -- 'CON:<xxx>%'
+    STEP = 0x01  # Step -- 'STP: <x.xxxx>'
+    MPG = 0x02   # Manual Pulse Generator -- Not implemented
+    PCT = 0x03   # Percent -- Not implemented
 
 
 class CoordinateSpace():
-    MACHINE = 0
-    WORKPIECE = 1
+    #### FIXME figure out which of these is correct
+    MACHINE = 0    # aka Absolute Positioning
+    WORKPIECE = 1  # aka Relative Positioning
 
 
 class Pendant(Receiver):
     """Object that encapsulates the XHC WHB04B-4 pendant's USB receiver
     """
+    DEF_MOTION_MODE = MotionMode.STEP
+
     VENDOR_ID = 0x10ce
     PRODUCT_ID = 0xeb93
 
@@ -163,10 +172,26 @@ class Pendant(Receiver):
           If the axis knob is in the "Off" position, then the coordinate lines
            are not updated.
           ????
+
+          The flags byte contains four fields:
+            * relativeCoordinates[7]: set means use 'X1' (Workpiece), clear use 'X' (Machine)
+            * reset[6]: display "RESET" if set, motionMode otherwise
+            * unknown[5:2]: ?
+            * motionMode[1:0]: motionMode
+
+          Inputs:
+            motionMode: ?
+            coordinateSpace: ?
+            coordinate1: ?
+            coordinate2: ?
+            coordinate3: ?
+            feedrate: ?
+            spindleSpeed: ?
+            reset: ?
         """
         #### TODO validate inputs
         HEADER = 0xfdfe
-        seed = 0x12  #### FIXME figure this out
+        seed = 0xfe #0x12  #### FIXME figure this out
         flags = ((coordinateSpace << 7) & 0x80) | ((reset << 6) & 0x40) | (motionMode & 0x03)
         fractSign = lambda v: (abs(int(v)), (((v < 0) << 15) | (int((str(v).split('.')[1] + "0000")[:4]) & 0x7fff))) if v else (0, 0)
         dispCmd = struct.pack("HBBHHHHHHHH",
@@ -181,12 +206,13 @@ class Pendant(Receiver):
         logging.debug(f"dispCmd: {[hex(x) for x in dispCmd]}")
         return dispCmd
 
-    def __init__(self):
+    def __init__(self, motionMode=DEF_MOTION_MODE):
         """Connect to the USB RF dongle and issue command to bring the pendant
             out of reset.
-        """
-        self.motionMode = None
 
+          Inputs:
+            motionMode: ????
+        """
         self.deviceInfo = hid.enumerate(Pendant.VENDOR_ID, Pendant.PRODUCT_ID)
         if len(self.deviceInfo) > 1:
             logging.warning("More than one XHC pendant receiver found")
@@ -195,11 +221,7 @@ class Pendant(Receiver):
         if self.device.manufacturer != 'KTURT.LTD':
             raise Exception(f"Invalid pendent receiver device: {self.device.manufacturer}")
         super().__init__(name="Pendant")
-
-        # N.B. The coordinate display values are retained across power cycle
-        #      events, and stay until updated by inputs from the Controller.
-        self.sendOutput(Pendant._makeDisplayCommand(reset=1))
-        logging.debug("Reset receiver")
+        self.reset(motionMode)
 
     def _flushInput(self):
         inp = self._rawInputPacket()
@@ -241,6 +263,17 @@ class Pendant(Receiver):
         #### TODO figure out how their checksum works and validate input packets
         return {'data': ins, 'type': "input"}
 
+    def reset(self, motionMode=DEF_MOTION_MODE):
+        """????
+
+          N.B. The coordinate display values are retained across power cycle
+               events, and stay until updated by inputs from the Controller.
+        """
+        #### FIXME clean this up
+        self.sendOutput(Pendant._makeDisplayCommand(motionMode=motionMode, reset=1))
+        self.sendOutput(Pendant._makeDisplayCommand(motionMode=motionMode, reset=0))
+        logging.debug("Pendant Reset")
+
     def sendOutput(self, data):
         HDR = bytes([0x06])
         dataPackets = [data[i:i+7] for i in range(0, len(data), 7)]
@@ -256,19 +289,26 @@ class Pendant(Receiver):
     def updateDisplay(self, motionMode, coordinateSpace, coordinates, feedrate, spindleSpeed):
         """????
         """
-        print("XXXX", motionMode, coordinateSpace, coordinates, feedrate, spindleSpeed)
+        assert 0 <= motionMode <= 3, f"Invalid motionMode: {motionMode}"
+        assert coordinateSpace == 0 or coordinateSpace == 1, f"Invalid coordinateSpace {coordinateSpace}"
+        assert len(coordinates) == 3 and all([isinstance(c, float) for c in coordinates]), f"Invalid coordinates: {coordinates}"
+        assert isinstance(feedrate, int) & feedrate >= 0, f"Invalid feedrate: {feedrate}"
+        assert isinstance(spindleSpeed, int) and spindleSpeed >= 0, f"Invalid spindleSpeed: {spindleSpeed}"
         self.sendOutput(Pendant._makeDisplayCommand(motionMode,
                                                     coordinateSpace,
                                                     *coordinates,
                                                     feedrate,
-                                                    spindleSpeed))
+                                                    spindleSpeed,
+                                                    0))
 
 
 #
 # TEST
 #
 if __name__ == '__main__':
-    # N.B. must press a motion mode button to start the test, and hit "stop" to end test
+    import time
+
+    # N.B. hit "stop" to end test
     #### FIXME add real tests
     logging.basicConfig(level="DEBUG",
                         format='%(asctime)s %(levelname)-8s %(message)s',
@@ -276,12 +316,48 @@ if __name__ == '__main__':
     print("Start")
     p = Pendant()
     p.start()
+    """
+    p.sendOutput(Pendant._makeDisplayCommand(reset=0))
+    p.sendOutput(Pendant._makeDisplayCommand(reset=1))
+    p.sendOutput(Pendant._makeDisplayCommand(reset=0))
+    p.sendOutput(Pendant._makeDisplayCommand(coordinate1=1.0, motionMode=3, feedrate=110))
+    p.sendOutput(Pendant._makeDisplayCommand(coordinate1=2.0, motionMode=3))
+    p.sendOutput(Pendant._makeDisplayCommand(motionMode=3))
+    p.sendOutput(Pendant._makeDisplayCommand(motionMode=1))
+    p.sendOutput(Pendant._makeDisplayCommand(motionMode=3))
+    p.sendOutput(Pendant._makeDisplayCommand(motionMode=1))
+    """
+    x = 0.0
+    m = 0
     while True:
-        print("get input")
         ins = p.getInput()['data']
         print("Input:", ins)
         if ins['key1'] == 2 and ins['key2'] == 0:
             break
+        if ins['key1'] == 4 and ins['key2'] == 0:
+            print("===> 0")
+            p.sendOutput(Pendant._makeDisplayCommand(motionMode=0))
+        if ins['key1'] == 5 and ins['key2'] == 0:
+            print("===> 1")
+            p.sendOutput(Pendant._makeDisplayCommand(motionMode=1))
+        if ins['key1'] == 6 and ins['key2'] == 0:
+            m = 0
+            print(f"===>RRRR: {m}")
+            p.reset(m)
+        if ins['key1'] == 12 and ins['key2'] == 6:
+            m = 1
+            print(f"===>RRRR: {m}")
+            p.reset(m)
+        if ins['key1'] == 7 and ins['key2'] == 0:
+            m = 2
+            print(f"===>RRRR: {m}")
+            p.reset(m)
+        if ins['key1'] == 12 and ins['key2'] == 7:
+            m = 3
+            print(f"===>RRRR: {m}")
+            p.reset(m)
+        x += 0.1
+        p.sendOutput(Pendant._makeDisplayCommand(coordinate1=x, feedrate=int(x*10)))
     print("Shutting down")
     p.shutdown()
     assert p.isShutdown(), "Not shutdown properly"
