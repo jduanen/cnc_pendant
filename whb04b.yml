@@ -1,20 +1,32 @@
 # example macros definitions
 ---
-- description: Set millimeter and incremental movement modes
+macro-1:
+  description: Set millimeter and incremental movement modes
   commands: G21 G91
-- description: Turn on flood coolant
+macro-2:
+  description: Turn on flood coolant
   commands: M8
-- description: Turn off flood and mist coolant
+macro-3:
+  description: Turn off flood and mist coolant
   commands: M9
-- description: Print settings and parameters, then parser state
+macro-4:
+  description: Turn on spindle
+  commands: M3
+macro-5:
+  description: Turn off spindle
+  commands: M5
+macro-6:
+  description: Print settings and parameters, then parser state
   before:
     - VIEW_SETTINGS
     - VIEW_PARAMETERS
   commands:
   after: VIEW_PARSER
-- description: Print build info
+macro-7:
+  description: Print build info
   before: VIEW_BUILD
   commands:
-- description: Print help
-  before: HELP
+macro-8:
+  description: Print help
+  before: DUMP_STATE
   commands:
