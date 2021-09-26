@@ -178,7 +178,6 @@ class Controller(Receiver):
         else:
             packetType = PacketTypes.STANDARD
         result = {'data': str(packet), 'type': packetType}
-        logging.debug(f"Controller Received: {result}")
         return result
 
     def _flushInput(self):
