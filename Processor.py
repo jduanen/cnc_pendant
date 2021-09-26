@@ -15,22 +15,24 @@ from parse import parse
 
 from Controller import Controller
 from Host import Host
-from Pendant import Pendant, KEYMAP, FN_KEYMAP, KEYNAMES_MAP, INCR
+import Pendant
 
 
 JOG_SPEED = 500  #### FIXME
 MAX_SPEED = 1000  #### FIXME
 
-MAX_NUM_MACROS = 9  # N.B. temporarily reserving one for exit command
+MAX_NUM_MACROS = 10
 
-STATUS_POLL_INTERVAL = 0.5
+STATUS_POLL_INTERVAL = 2 # 0.5
 
 
 assert JOG_SPEED <= MAX_SPEED
 
+# N.B. This can be global as there's a single writer (PendantInput)
+moveMode = Pendant.MotionMode.STEP
 
-#### TODO add another thread for "controllerStatus()" -- update display with information
-#### TODO add a thread to issue status queries during jog -- maybe use the Controller thread and jog tracking?
+# N.B. This can be global as there's a single writer (PendantInput)
+axisMode = None
 
 
 class ControllerInput(threading.Thread):
@@ -57,19 +59,66 @@ class ControllerStatus(threading.Thread):
     """????
       <gets status from controller and updates the pendant display>
     """
-    def __init__(self, runningEvent, controller):
+    COORDINATE_SPACE_MAP = {
+        'MPos': Pendant.CoordinateSpace.MACHINE,
+        'WPos': Pendant.CoordinateSpace.WORKPIECE
+    }
+
+    def __init__(self, runningEvent, controller, pendant):
         self.running = runningEvent
         self.ctlr = controller
+        self.pendant = pendant
         super().__init__()
 
+    def _parseStatus(self, status):
+        status = status[1:-1].split('|')
+        parts = {p.split(':')[0]: p.split(':')[1] for p in status[1:]}
+        parsedStatus = {'state': status[0]}
+        for name, part in parts.items():
+            if name.endswith('Pos'):
+                parsedStatus['coordinateSpace'] = ControllerStatus.COORDINATE_SPACE_MAP[name]
+                parsedStatus['coordinates'] = list(map(float, part.split(',')))
+            elif name == "Bf":
+                parsedStatus['planBuffers'] = part.split(',')[0]
+                parsedStatus['rxBuffers'] = part.split(',')[1]
+            elif name == "Ln":
+                parsedStatus['lineNumber'] = int(part)
+            elif name == "FS":
+                parsedStatus['feedSpeed'] = float(part.split(',')[0])
+                parsedStatus['spindleSpeed'] = int(part.split(',')[1])
+            elif name == "F":
+                parsedStatus['feedSpeed'] = int(part)
+            elif name == "WCO":
+                #### TODO parse this further
+                parsedStatus['workCoordinateOffset'] = part
+            elif name == "A":
+                #### TODO parse this further
+                parsedStatus['accessoryState'] = part
+            elif name == "Ov":
+                #### TODO parse this further
+                parsedStatus['overrides'] = part
+            elif name == "Pn":
+                #### TODO parse this further
+                parsedStatus['pinStates'] = part
+            else:
+                logging.error(f"Unimplemented status field: {name}: {part}")
+        return parsedStatus
+
     def run(self):
+        global moveMode  # N.B. read-only in this thread
+        global axisMode  # N.B. read-only in this thread
+
         logging.debug("Starting controllerStatus thread")
         self.ctlr.start()
         while self.running.isSet():
-            status = self.ctlr.getStatus()
-            #### TODO update Pendant display
+            status = self._parseStatus(self.ctlr.getStatus())
+            logging.info(f"Status: {status}")
+            self.pendant.updateDisplay(moveMode,
+                                       status['coordinateSpace'],
+                                       status['coordinates'] if axisMode == Pendant.AxisMode.XYZ else [0.0, 0.0, 0.0],
+                                       status['feedSpeed'],
+                                       status.get('spindleSpeed', 0))
         logging.debug("Exited ControllerStatus")
-
 
 class StatusPolling(threading.Thread):
     """????
@@ -91,41 +140,15 @@ class Processor():
     """????
     """
     def __init__(self, pendant, controller, host, macros=[]):
-        assert isinstance(pendant, Pendant), f"pendant is not an instance of Pendant: {type(pendant)}"
+        assert isinstance(pendant, Pendant.Pendant), f"pendant is not an instance of Pendant: {type(pendant)}"
         self.pendant = pendant
         assert isinstance(controller, Controller), f"controller is not an instance of Controller: {type(controller)}"
         self.controller = controller
 
         self.spindleState = False
-        self.stepMode = None  #### FIXME use startup default value
 
-        def dollarViewClosure(cmdName):
-            def closure():
-                return controller.dollarView(cmdName)
-            return closure
-
-        #### TODO add more magic commands
-        self.magicCommands = {
-            'VIEW_SETTINGS': dollarViewClosure('VIEW_SETTINGS'),
-            'VIEW_PARAMETERS': dollarViewClosure('VIEW_PARAMETERS'),
-            'VIEW_PARSER': dollarViewClosure('VIEW_PARSER'),
-            'VIEW_BUILD': dollarViewClosure('VIEW_BUILD'),
-            'VIEW_STARTUPS': dollarViewClosure('VIEW_STARTUPS'),
-            'HELP': dollarViewClosure('HELP')
-        }
-
-        assert isinstance(macros, list), f"Invalid macros -- must be list of dicts: {macros}"
-        assert len(macros) < MAX_NUM_MACROS, f"Invalid macros -- too many definitions, must be less than {MAX_NUM_MACROS}"
-        assert all(['commands' in m.keys() and 'description' in m.keys() for m in macros]), f"Invalid macros -- each definition must have 'commands' and 'description' keys"
-
-        #### TODO convert all before and after fields to lists
-        for m in macros:
-            m.update((k, v.split()) for k, v in m.items() if k in ('before', 'after') and isinstance(v, str))
-        self.macros = macros
-        #### TODO validate magic commands in before and after fields
-        #assert cmd in MAGIC_COMMANDS, f"Invalid magic command: {cmd}"
-
-        #### TODO validate macros -- turn off motion and run through grbl to see if good
+        self.magicCommands = self._initMagic()
+        self.macros = self._defineMacros(macros)
 
         self.p2cRunning = threading.Event()
         self.p2cRunning.set()
@@ -134,7 +157,7 @@ class Processor():
         self.c2pRunning = threading.Event()
         self.c2pRunning.set()
         self.c2piThread = ControllerInput(self.c2pRunning, self.controller)
-        self.c2psThread = ControllerStatus(self.c2pRunning, self.controller)
+        self.c2psThread = ControllerStatus(self.c2pRunning, self.controller, self.pendant)
 
         self.statusStop = threading.Event()
         self.statusStop.clear()
@@ -148,8 +171,61 @@ class Processor():
         #### TODO hook up the host
 
     def _executeMagic(self, commands):
+        results = ""
         for cmd in commands:
-            pass  #### FIXME
+            results += self.magicCommands[cmd]() + '\n'
+        return results
+
+    #### TODO add more magic commands
+    def _initMagic(self):
+        def dumpState():
+            state = f"Running threads: {threading.enumerate()}\n"
+            state += f"Globals: moveMode={moveMode}, axisMode={axisMode}\n"
+            #### TODO add more state info
+            return state
+
+        def dollarViewClosure(cmdName):
+            def closure():
+                return self.controller.dollarView(cmdName)
+            return closure
+
+        return {
+            'VIEW_SETTINGS': dollarViewClosure('VIEW_SETTINGS'),
+            'VIEW_PARAMETERS': dollarViewClosure('VIEW_PARAMETERS'),
+            'VIEW_PARSER': dollarViewClosure('VIEW_PARSER'),
+            'VIEW_BUILD': dollarViewClosure('VIEW_BUILD'),
+            'VIEW_STARTUPS': dollarViewClosure('VIEW_STARTUPS'),
+            'HELP': self.controller.dollarView, #### FIXME
+            'DUMP_STATE': dumpState
+        }
+
+    def _defineMacros(self, macros):
+        ##assert isinstance(macros, dict) and all([isinstance(k, int) and isinstance(v, dict) for k, v in dict.items()]), f"Invalid macros -- must be dict of dicts with integer keys and dict values: {macros}"
+        ##assert all(['commands' in m.keys() and 'description' in m.keys() for m in macros]), f"Invalid macros -- each definition must have 'commands' and 'description' keys"
+        '''
+        for m in macros:
+            m.update((k, v.split()) for k, v in m.items() if k in ('before', 'after') and isinstance(v, str))
+        '''
+        macroList = [None for _ in range(0, MAX_NUM_MACROS + 1)]
+        for name, macro in macros.items():
+            res = parse("Macro-{num:d}", name)
+            if res:
+                num = res['num']
+            else:
+                logging.warning(f"Invalid macro name '{name}': ignoring")
+                continue
+            if num <= 0 or num > MAX_NUM_MACROS:
+                logging.warning(f"Invalid macro number '{num}': ignoring")
+                continue
+            #### TODO validate macro -- turn off motion and run through grbl to see if good
+            #### TODO validate magic commands in before and after fields
+            #assert cmd in MAGIC_COMMANDS, f"Invalid magic command: {cmd}"
+            macro.update((k, v.split()) for k, v in macro.items() if k in ('before', 'after') and isinstance(v, str))
+            macroList[num] = macro
+        return macroList
+
+    def defineMacros(self, macros):
+        self.macros = self._defineMacros(macros)
 
     def magicCommandNames(self):
         return list(self.magicCommands.keys())
@@ -187,6 +263,11 @@ class Processor():
         return self.p2cThread.is_alive()
 
     def pendantInput(self):
+        """????
+        """
+        global moveMode  # N.B. this thread is the single writer
+        global axisMode  # N.B. this thread is the single writer
+
         logging.debug("Starting pendantInput thread")
         self.pendant.start()
         while self.p2cRunning.isSet():
@@ -194,93 +275,103 @@ class Processor():
             if not inputs:
                 continue
             inputs = inputs['data']
-            logging.debug(f"PIN: {inputs}")
-            key = KEYMAP[inputs['key1']] if inputs['key2'] == 0 else FN_KEYMAP[inputs['key2']] if inputs['key1'] == KEYNAMES_MAP['Fn'] else None
+            axisMode = Pendant.AxisMode.OFF if inputs['axis'] == 6 else Pendant.AxisMode.XYZ if inputs['axis'] < 20 else Pendant.AxisMode.ABC
+            logging.info(f"PendantInput: {inputs}")
+            key = Pendant.KEYMAP[inputs['key1']] if inputs['key2'] == 0 else Pendant.FN_KEYMAP[inputs['key2']] if inputs['key1'] == Pendant.KEYNAMES_MAP['Fn'] else None
             if key:
                 if key == "Reset":
-                    logging.debug("Reset and unlock GRBL")
+                    logging.debug("PI -- Reset and unlock GRBL")
                     self.controller.realtimeCommand("RESET")
                     self.controller.killAlarmLock()
                 elif key == "Stop":
-                    logging.debug("Stop: feed hold")
+                    logging.debug("PI -- Stop: feed hold")
                     self.controller.realtimeCommand("FEED_HOLD")
                 elif key == "StartPause":
-                    logging.debug("StartPause: cycle start")
+                    logging.debug("PI -- StartPause: cycle start")
                     self.controller.realtimeCommand("CYCLE_START")
                 elif key.startswith("Feed"):
                     #### FIXME select 100/10/1 increment based on feed switch setting
                     if key == "Feed+":
-                        logging.debug("Feed+: TBD")
+                        logging.debug("PI -- Feed+: TBD")
                     elif key == "Feed-":
-                        logging.debug("Feed-: TBD")
+                        logging.debug("PI -- Feed-: TBD")
                 elif key.startswith("Spindle"):
                     #### FIXME select 100/10/1 increment based on feed switch setting
                     if key == "Spindle+":
-                        logging.debug("Spindle+: TBD")
+                        logging.debug("PI -- Spindle+: TBD")
                     if key == "Spindle-":
-                        logging.debug("Spindle-: TBD")
+                        logging.debug("PI -- Spindle-: TBD")
                 elif key == "M-Home":
-                    logging.debug("M-Home: TBD")
+                    logging.debug("PI -- M-Home: TBD")
                 elif key == "Safe-Z":
-                    logging.debug("Save-Z: TBD")
+                    logging.debug("PI -- Save-Z: TBD")
                 elif key == "W-Home":
-                    logging.debug("W-Home: TBD")
+                    logging.debug("PI -- W-Home: TBD")
                 elif key == "S-on/off":
                     if self.spindleState:
-                        logging.debug(f"Spindle: off")
+                        logging.debug(f"PI -- Spindle: off")
                         self.spindleState = False
                         self.controller.streamCmd("M5")
                     else:
-                        logging.debug(f"Spindle: on")
+                        logging.debug(f"PI -- Spindle: on")
                         self.spindleState = True
                         self.controller.streamCmd("M3")
                 elif key == "Fn":
-                    logging.debug("Fn")
+                    logging.debug("PI -- Fn")
                 elif key == "Probe-Z":
-                    logging.debug("Probe-Z: TBD")
+                    logging.debug("PI -- Probe-Z: TBD")
                 elif key == "Continuous":
-                    self.stepMode = False
-                    logging.debug("Continuous: TBD")
+                    moveMode = Pendant.MotionMode.CONT
+                    logging.debug(f"PI -- Continuous: set moveMode to {moveMode}")
                 elif key == "Step":
-                    self.stepMode = True
-                    logging.debug("Step: TBD")
-                elif key.startswith("Macro-10"):
-                    #### TMP TMP TMP hard-coded as shutdown key
-                    logging.debug(f"{key}: SHUTDOWN")
+                    moveMode = Pendant.MotionMode.STEP
+                    logging.debug(f"PI -- Step: set moveMode to {moveMode}")
+                elif key == "PendantReset":
+                    # hard-coded as key to press after Pendant power-on
+                    logging.debug("PI -- PendantReset: bring out of reset")
+                    self.pendant.reset(moveMode)
+                    break
+                elif key == "ApplicationExit":
+                    # hard-coded as application shutdown key
+                    logging.debug("PI -- ApplicationExit: SHUTDOWN")
                     self.p2cRunning.clear()
                     break
                 elif key.startswith("Macro-"):
                     res = parse("Macro-{num:d}", key)
                     if res:
-                        num = res['num'] - 1
-                        if num >= len(self.macros):
-                            logging.error(f"Undefined macro #{num}")
+                        num = res['num']
+                        if not self.macros[num]:
+                            logging.error(f"Undefined macro: Macro-{num}")
                         else:
-                            logging.debug(f"Macro #{num}: {self.macros[num]['description']}")
+                            logging.debug(f"PI -- Macro-{num}: {self.macros[num]['description']}")
+
                             magic = self.macros[num]['before'] if 'before' in self.macros[num] else []
+                            logging.debug(f"PI -- Before Magic Commands: {magic}")
                             res = self._executeMagic(magic)
-                            logging.info(f"Before Magic Commands: {magic}\n{res}")
+                            logging.info(res)
+
                             if self.macros[num]['commands']:
                                 self.controller.streamCmd(self.macros[num]['commands'])
+
                             magic = self.macros[num]['after'] if 'after' in self.macros[num] else []
+                            logging.debug(f"PI -- After Magic Commands: {magic}")
                             res = self._executeMagic(magic)
-                            logging.info(f"After Magic Commands: {magic}\n{res}")
+                            logging.info(res)
                     else:
                         logging.error(f"Failed to parse Macro number: {key}")
                 else:
                     logging.warning(f"Unimplemented Key: {key}")
-####                self.controller.realtimeCommand("STATUS")
 
             if inputs['jog']:
-                incr = INCR['Step' if self.stepMode else 'Continuous'][inputs['incr']]
+                incr = Pendant.Pendant.INCR[moveMode][inputs['incr']]
                 assert incr, "Got Jog command, but Incr is Off"
-                if self.stepMode:
+                if moveMode == Pendant.MotionMode.STEP:
                     distance = inputs['jog'] * incr
                     speed = JOG_SPEED
-                else:
+                elif moveMode == Pendant.MotionMode.CONT:
                     distance = 1  #### FIXME
                     speed = MAX_SPEED * incr * (1 if inputs['jog'] > 0 else -1)
-                logging.debug(f"Jog {distance} @ {speed}")
+                logging.debug(f"PI -- Jog {distance} @ {speed}")
         self.pendant.shutdown()
         logging.debug("Exit PendantInput")
 
@@ -297,7 +388,7 @@ if __name__ == '__main__':
                         format='%(asctime)s %(levelname)-8s %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
     print("START")
-    p = Pendant()
+    p = Pendant.Pendant()
     print("p")
     c = Controller()
     print("c")
