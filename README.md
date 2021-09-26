@@ -62,14 +62,15 @@ Connect an XHC WHB04B pendant to a GRBL-based CNC controller
   * pendant automatically displays the value of the axis knob with an asterix next to a coordinate line
     - host is not able to set the selection marker
   * top display line is the status line RF bars icon, battery level icon, and mode word
-    - mode word starts as "RESET" until motion mode button is selected
+    - mode word starts as "RESET" until motion mode mode is set
   * after motion mode is selected, the mode word becomes either "CONT" or "STP"
-    - the value following the mode word dependent on the mode
+    - the value following the mode word is dependent on the mode
       * for "STP" the value is a floating point number
       * for "CONT" the value is a percentage
   * the display format is specific to the motion mode
     - e.g., "STP: 1.0", "CONT: 30%"
     - both MPG and PCT motion modes display "XX%", where 'XX' is given by the incr knob setting
+      * no text associated with these modes -- just 'XX%'
   * if axis knob is in "off" state, can't update the display
     - don't send display packets if that's the case -- drop commands and log warnings
     - if power on with axis "off", emits axis off (0x06) and state of incr knob
@@ -120,12 +121,27 @@ Connect an XHC WHB04B pendant to a GRBL-based CNC controller
     - incr: 0x0e=0.001/2%, 0x0d=0.02/5% ...
 
 * notes
-  - always have to click motion mode button after power-on of pendant (i.e., either "Continuous" or "Step")
-  - need to interrogate the Controller to get the current values for the Coordinate
+  - always have to click some button after power-on of Pendant
+    * otherwise, don't know when you just turned on the Pendant
+    * assume that the app is always running and the Pendant gets turned on/off at random times
+      - also, if the Pendant is on when the app starts, then need to hit the button again
+    * use Fn(RESET) to get Pendant out of reset mode
+  - use Fn(STOP) to exit app
+  - need to interrogate the Controller to get the current values for the Coordinates
+    * just do this by periodically asking the Controller for status ('?')
+    * status inputs are demuxed onto another channel
   - the -4 pendant only has four values (0x11-0x14), other two values for the -6
   - this application should interpret the final three positions of the incr knob as: 10, 50, 100?
-  - starting up this program will force the pendant into RESET state
-    * will have to select motion mode in order to get out of reset
   - the input from the pendant and the pendant's display are logically independent
     * it may take some time for the controller to receive inputs from the pendant and send back results that then are sent to the pendant's display
     * everything should converge to a consistent state quickly
+  - other controllers have MPG and CONT/STEP buttons
+    * mine has CONT and STEP buttons
+      - this means that it only understands two modes
+      - this is why I've never seen "MPG" or "PCT" displays
+
+* install udev rules for RF dongle and reload udevd
+  - sudo cp ./99-xhc-whb04b-4.rules /etc/udev/rules.d/
+  - sudo udevadm control --reload-rules
+  - sudo udevadm trigger
+
