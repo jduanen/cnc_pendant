@@ -145,3 +145,7 @@ Connect an XHC WHB04B pendant to a GRBL-based CNC controller
   - sudo udevadm control --reload-rules
   - sudo udevadm trigger
 
+* info on the xhc-whb04b-6
+  - https://github.com/machinekit/machinekit/blob/master/src/hal/user_comps/xhc-whb04b-6/README.md
+
+  
