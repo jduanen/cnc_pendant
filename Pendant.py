@@ -51,7 +51,7 @@ KEYNAMES_MAP = {
 
 KEYMAP = (
     None,
-    "Reset",
+    "PendantReset",     # N.B. my definition
     "Stop",
     "StartPause",
     "Macro-1",
@@ -71,7 +71,7 @@ KEYMAP = (
 
 FN_KEYMAP = (
     None,
-    "PendantReset",     # N.B. my definition
+    "Reset",
     "ApplicationExit",  # N.B. my definition
     "StartPause",
     "Feed+",
@@ -171,6 +171,8 @@ class Pendant(Receiver):
 
           If the axis knob is in the "Off" position, then the coordinate lines
            are not updated.
+
+          Not sure if seed should be 0x12 or 0xFE.
           ????
 
           The flags byte contains four fields:
@@ -178,6 +180,11 @@ class Pendant(Receiver):
             * reset[6]: display "RESET" if set, motionMode otherwise
             * unknown[5:2]: ?
             * motionMode[1:0]: motionMode
+
+          The floating point coordinate values are given as two 16b words:
+            * integer part [0:15]
+            * fraction part [0:14]
+            * sign bit[15]
 
           Inputs:
             motionMode: ?
@@ -191,9 +198,10 @@ class Pendant(Receiver):
         """
         #### TODO validate inputs
         HEADER = 0xfdfe
-        seed = 0xfe #0x12  #### FIXME figure this out
+        seed = 0x12 #0xfe #0x12  #### FIXME figure this out
         flags = ((coordinateSpace << 7) & 0x80) | ((reset << 6) & 0x40) | (motionMode & 0x03)
         fractSign = lambda v: (abs(int(v)), (((v < 0) << 15) | (int((str(v).split('.')[1] + "0000")[:4]) & 0x7fff))) if v else (0, 0)
+        print(f"X: {coordinate1} {fractSign(coordinate1)}, Y: {coordinate2} {fractSign(coordinate2)}, Z: {coordinate3} {fractSign(coordinate3)}")
         dispCmd = struct.pack("HBBHHHHHHHH",
                               HEADER,
                               seed,
@@ -271,7 +279,7 @@ class Pendant(Receiver):
         """
         #### FIXME clean this up
         self.sendOutput(Pendant._makeDisplayCommand(motionMode=motionMode, reset=1))
-        self.sendOutput(Pendant._makeDisplayCommand(motionMode=motionMode, reset=0))
+#        self.sendOutput(Pendant._makeDisplayCommand(motionMode=motionMode, reset=0))
         logging.debug("Pendant Reset")
 
     def sendOutput(self, data):
@@ -329,6 +337,7 @@ if __name__ == '__main__':
     """
     x = 0.0
     m = 0
+    direction = -1
     while True:
         ins = p.getInput()['data']
         print("Input:", ins)
@@ -356,8 +365,13 @@ if __name__ == '__main__':
             m = 3
             print(f"===>RRRR: {m}")
             p.reset(m)
-        x += 0.1
-        p.sendOutput(Pendant._makeDisplayCommand(coordinate1=x, feedrate=int(x*10)))
+        if ins['key1'] == 8 and ins['key2'] == 0:
+            direction = 1
+        if ins['key1'] == 12 and ins['key2'] == 8:
+            direction = -1
+        x = round(x + (0.1 * direction), 6)
+        print("XXXXX:", x)
+        p.sendOutput(Pendant._makeDisplayCommand(coordinate1=x, feedrate=abs(int(x*10))))
     print("Shutting down")
     p.shutdown()
     assert p.isShutdown(), "Not shutdown properly"
