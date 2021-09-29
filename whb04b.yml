@@ -2,7 +2,7 @@
 ---
 macro-1:
   description: Set millimeter and incremental movement modes
-  commands: G21 G91
+  commands: G21 G91 M3
 macro-2:
   description: Turn on flood coolant
   commands: M8
@@ -23,10 +23,18 @@ macro-6:
   commands:
   after: VIEW_PARSER
 macro-7:
-  description: Print build info
+  description: Print build info and dump the state
   before: VIEW_BUILD
   commands:
+  after: DUMP_STATE
 macro-8:
-  description: Print help
-  before: DUMP_STATE
+  description: Show startup lines
+  before: VIEW_STARTUPS
   commands:
+macro-9:
+  description: Run home cycle
+  commands: $H
+macro-10:
+  description: Setup startup line #0
+  commands: $N0=G21 G91 M3
+  after: VIEW_STARTUPS
