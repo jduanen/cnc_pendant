@@ -23,7 +23,7 @@ MAX_SPEED = 1000  #### FIXME
 
 MAX_NUM_MACROS = 10
 
-STATUS_POLL_INTERVAL = 2 # 0.5
+STATUS_POLL_INTERVAL = 0.5
 
 
 assert JOG_SPEED <= MAX_SPEED
@@ -69,6 +69,9 @@ class ControllerStatus(threading.Thread):
         self.ctlr = controller
         self.pendant = pendant
         super().__init__()
+
+        self.feedSpeed = 0
+        self.spindleSpeed = 0
 
     def _parseStatus(self, status):
         status = status[1:-1].split('|')
@@ -116,8 +119,10 @@ class ControllerStatus(threading.Thread):
             self.pendant.updateDisplay(moveMode,
                                        status['coordinateSpace'],
                                        status['coordinates'] if axisMode == Pendant.AxisMode.XYZ else [0.0, 0.0, 0.0],
-                                       status['feedSpeed'],
+                                       status['feedSpeed'] if status['feedSpeed'] != self.feedSpeed else 0,
                                        status.get('spindleSpeed', 0))
+            self.feedSpeed = status['feedSpeed']
+            self.spindleSpeed = status.get('spindleSpeed', 0)
         logging.debug("Exited ControllerStatus")
 
 class StatusPolling(threading.Thread):
@@ -139,7 +144,7 @@ class StatusPolling(threading.Thread):
 class Processor():
     """????
     """
-    def __init__(self, pendant, controller, host, macros=[]):
+    def __init__(self, pendant, controller, host, macros={}):
         assert isinstance(pendant, Pendant.Pendant), f"pendant is not an instance of Pendant: {type(pendant)}"
         self.pendant = pendant
         assert isinstance(controller, Controller), f"controller is not an instance of Controller: {type(controller)}"
@@ -363,15 +368,20 @@ class Processor():
                     logging.warning(f"Unimplemented Key: {key}")
 
             if inputs['jog']:
-                incr = Pendant.Pendant.INCR[moveMode][inputs['incr']]
-                assert incr, "Got Jog command, but Incr is Off"
-                if moveMode == Pendant.MotionMode.STEP:
-                    distance = inputs['jog'] * incr
-                    speed = JOG_SPEED
-                elif moveMode == Pendant.MotionMode.CONT:
-                    distance = 1  #### FIXME
-                    speed = MAX_SPEED * incr * (1 if inputs['jog'] > 0 else -1)
-                logging.debug(f"PI -- Jog {distance} @ {speed}")
+                if axisMode == Pendant.AxisMode.XYZ:
+                    incr = Pendant.Pendant.INCR[moveMode][inputs['incr']]
+                    if incr:
+                        if moveMode == Pendant.MotionMode.STEP:
+                            distance = inputs['jog'] * incr
+                            speed = JOG_SPEED
+                        elif moveMode == Pendant.MotionMode.CONT:
+                            distance = 1  #### FIXME
+                            speed = MAX_SPEED * incr * (1 if inputs['jog'] > 0 else -1)
+                        axis = Pendant.AXIS[inputs['axis']]
+                        logging.debug(f"PI -- Jog: $J={axis}{distance} F{speed}")
+                        self.controller.jogIncrementalAxis(axis, distance, speed)
+                elif axisMode == Pendant.AxisMode.ABC:
+                    logging.error("TBD")
         self.pendant.shutdown()
         logging.debug("Exit PendantInput")
 
