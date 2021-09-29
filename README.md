@@ -139,6 +139,9 @@ Connect an XHC WHB04B pendant to a GRBL-based CNC controller
     * mine has CONT and STEP buttons
       - this means that it only understands two modes
       - this is why I've never seen "MPG" or "PCT" displays
+  - doesn't update 'F:<>' display when in STEP mode, does in CONT mode
+  - pendant remembers the coordinates and other state between power cycles
+    * but comes up with RESET flag set -- must clear it to go on
 
 * install udev rules for RF dongle and reload udevd
   - sudo cp ./99-xhc-whb04b-4.rules /etc/udev/rules.d/
@@ -148,4 +151,3 @@ Connect an XHC WHB04B pendant to a GRBL-based CNC controller
 * info on the xhc-whb04b-6
   - https://github.com/machinekit/machinekit/blob/master/src/hal/user_comps/xhc-whb04b-6/README.md
 
-  
