@@ -2,8 +2,8 @@
 Object that encapsulates the XHC WHB04B-4 pendant's USB receiver
 
 Notes:
-  * I haven't seen "MPG", "F: ?", or "S: ?" displays yet, keep working on it
-    - looks like this unit doesn't generate these displays.
+  * I haven't seen "MPG" or "PCT" displays yet, keep working on it
+    - looks like this unit doesn't generate these displays
 
 '''
 
@@ -97,7 +97,7 @@ AXIS = {
     0x13: "Z",
     0x14: "A",
     0x15: "B",
-    0x16: "C",
+    0x16: "C"
 }
 
 
@@ -142,9 +142,9 @@ class Pendant(Receiver):
             0x0e: 0.01,
             0x0f: 0.1,
             0x10: 1.0,
-            0x1a: 5.0,
-            0x1b: 10.0,
-            0x9b: "Lead"
+            0x1a: 5.0,    # my definition, display won't reflect
+            0x1b: 10.0,   # my definition, display won't reflect
+            0x9b: None    # "Lead"
         },
         MotionMode.CONT: {
             0x00: None,
@@ -154,7 +154,7 @@ class Pendant(Receiver):
             0x10: .30,
             0x1a: .60,
             0x1b: 1.0,
-            0x9b: "Lead"
+            0x9b: None    # "Lead"
         }
     }
 
@@ -201,7 +201,6 @@ class Pendant(Receiver):
         seed = 0x12 #0xfe #0x12  #### FIXME figure this out
         flags = ((coordinateSpace << 7) & 0x80) | ((reset << 6) & 0x40) | (motionMode & 0x03)
         fractSign = lambda v: (abs(int(v)), (((v < 0) << 15) | (int((str(v).split('.')[1] + "0000")[:4]) & 0x7fff))) if v else (0, 0)
-        print(f"X: {coordinate1} {fractSign(coordinate1)}, Y: {coordinate2} {fractSign(coordinate2)}, Z: {coordinate3} {fractSign(coordinate3)}")
         dispCmd = struct.pack("HBBHHHHHHHH",
                               HEADER,
                               seed,
@@ -278,8 +277,9 @@ class Pendant(Receiver):
                events, and stay until updated by inputs from the Controller.
         """
         #### FIXME clean this up
-        self.sendOutput(Pendant._makeDisplayCommand(motionMode=motionMode, reset=1))
-#        self.sendOutput(Pendant._makeDisplayCommand(motionMode=motionMode, reset=0))
+        cSpace = CoordinateSpace.MACHINE  #### FIXME
+        self.sendOutput(Pendant._makeDisplayCommand(motionMode=motionMode, coordinateSpace=cSpace, reset=1))
+        self.sendOutput(Pendant._makeDisplayCommand(motionMode=motionMode, coordinateSpace=cSpace, reset=0))
         logging.debug("Pendant Reset")
 
     def sendOutput(self, data):
@@ -291,6 +291,7 @@ class Pendant(Receiver):
             dispPkt = HDR + dataPacket
             self.device.write(dispPkt)
             logging.debug(f"dispPkt[{i}]: {[hex(x) for x in dispPkt]}")
+            #print(f"dispPkt[{i}]: {[hex(x) for x in dispPkt]}")
             i += 1
             #### TODO consider a delay here
 
@@ -324,54 +325,89 @@ if __name__ == '__main__':
     print("Start")
     p = Pendant()
     p.start()
-    """
-    p.sendOutput(Pendant._makeDisplayCommand(reset=0))
-    p.sendOutput(Pendant._makeDisplayCommand(reset=1))
-    p.sendOutput(Pendant._makeDisplayCommand(reset=0))
-    p.sendOutput(Pendant._makeDisplayCommand(coordinate1=1.0, motionMode=3, feedrate=110))
-    p.sendOutput(Pendant._makeDisplayCommand(coordinate1=2.0, motionMode=3))
-    p.sendOutput(Pendant._makeDisplayCommand(motionMode=3))
-    p.sendOutput(Pendant._makeDisplayCommand(motionMode=1))
-    p.sendOutput(Pendant._makeDisplayCommand(motionMode=3))
-    p.sendOutput(Pendant._makeDisplayCommand(motionMode=1))
-    """
     x = 0.0
-    m = 0
+    m = MotionMode.STEP
+    c = CoordinateSpace.MACHINE
+    p.reset(m)
     direction = -1
+    f = 123
+    s = 4567
+    pos = {
+        'X': [0.0, 0.0],
+        'Y': [0.0, 0.0],
+        'Z': [0.0, 0.0]
+    }
     while True:
         ins = p.getInput()['data']
-        print("Input:", ins)
         if ins['key1'] == 2 and ins['key2'] == 0:
+            # STOP: shutdown
             break
-        if ins['key1'] == 4 and ins['key2'] == 0:
-            print("===> 0")
-            p.sendOutput(Pendant._makeDisplayCommand(motionMode=0))
-        if ins['key1'] == 5 and ins['key2'] == 0:
-            print("===> 1")
-            p.sendOutput(Pendant._makeDisplayCommand(motionMode=1))
-        if ins['key1'] == 6 and ins['key2'] == 0:
-            m = 0
-            print(f"===>RRRR: {m}")
+        elif ins['key1'] == 4 and ins['key2'] == 0:
+            # Macro-1: Continuous motion mode
+            m = MotionMode.CONT
+            print(f"CONT: ===> {m}")
+        elif ins['key1'] == 12 and ins['key2'] == 4:
+            # Fn(Macro-1): Step motion mode
+            m = MotionMode.STEP
+            print(f"STEP: ===> {m}")
+        elif ins['key1'] == 5 and ins['key2'] == 0:
+            # Macro-2: Machine Coordinate space
+            c = CoordinateSpace.MACHINE
+            print(f"CS: Machine {c}")
+        elif ins['key1'] == 12 and ins['key2'] == 5:
+            # Fn(Macro-2): Workpiece Coordinate space
+            c = CoordinateSpace.WORKPIECE
+            print(f"CS: Workpiece {c}")
+        elif ins['key1'] == 6 and ins['key2'] == 0:
+            # Macro-3: select CONT mode
+            m = MotionMode.CONT
+            print(f"===>CONT({m})")
+        elif ins['key1'] == 12 and ins['key2'] == 6:
+            # fn(Macro-3): select STEP mode
+            m = MotionMode.STEP
+            print(f"===>STEP({m})")
+        elif ins['key1'] == 7 and ins['key2'] == 0:
+            # Macro-4: select MPG mode
+            m = MotionMode.MPG
+            print(f"===>MPG({m})")
+        elif ins['key1'] == 12 and ins['key2'] == 7:
+            # fn(Macro-4): select PCT mode
+            m = MotionMode.PCT
+            print(f"===>PCT({m})")
+        elif ins['key1'] == 8 and ins['key2'] == 0:
+            # Macro-9: reset with current mode
+            print(f"===>RESET({m})")
             p.reset(m)
-        if ins['key1'] == 12 and ins['key2'] == 6:
-            m = 1
-            print(f"===>RRRR: {m}")
-            p.reset(m)
-        if ins['key1'] == 7 and ins['key2'] == 0:
-            m = 2
-            print(f"===>RRRR: {m}")
-            p.reset(m)
-        if ins['key1'] == 12 and ins['key2'] == 7:
-            m = 3
-            print(f"===>RRRR: {m}")
-            p.reset(m)
-        if ins['key1'] == 8 and ins['key2'] == 0:
+        elif ins['key1'] == 8 and ins['key2'] == 0:
+            # Macro-5: positive direction
             direction = 1
-        if ins['key1'] == 12 and ins['key2'] == 8:
+        elif ins['key1'] == 12 and ins['key2'] == 8:
+            # Fn(Macro-5): negative direction
             direction = -1
+
+        axis = AXIS[ins['axis']]
+        if axis in ('X', 'Y', 'Z'):
+            if m == MotionMode.STEP:
+                i = Pendant.INCR[m][ins['incr']]
+                print("IIIII", ins['incr'], i)
+                pos[AXIS[ins['axis']]][c] += ins['jog'] * i if i else 0.0
+            elif m == MotionMode.CONT:
+                incr = 0 #### FIXME
+            else:
+                incr = 0 #### FIXME
+        else:
+            print(f"TBD: {axis}")
+        p.updateDisplay(m, c, (pos['X'][c], pos['Y'][c], pos['Z'][c]), 0, 0) #f, s)
+        '''
         x = round(x + (0.1 * direction), 6)
-        print("XXXXX:", x)
-        p.sendOutput(Pendant._makeDisplayCommand(coordinate1=x, feedrate=abs(int(x*10))))
+        c1 = x
+        c2 = 2*x
+        c3 = 3*x
+        if abs(int(x)) % 3 == 0:
+            p.sendOutput(Pendant._makeDisplayCommand(motionMode=m, coordinateSpace=c, coordinate1=x)) #, feedrate=abs(int(x))))
+        else:
+            p.sendOutput(Pendant._makeDisplayCommand(motionMode=m, coordinateSpace=c, coordinate1=x, coordinate2=(2*x), coordinate3=(3*x)))
+        '''
     print("Shutting down")
     p.shutdown()
     assert p.isShutdown(), "Not shutdown properly"
