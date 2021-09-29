@@ -316,6 +316,22 @@ class Controller(Receiver):
         self._sendCmd("$H")
         #### TODO deal with Response message(s), if any
 
+    def jogIncrementalAxis(self, axis, distance, feedrate=DEF_FEEDRATE):
+        """Send realtime command to jog the spindle by given increment(s) along the given axis.
+
+          Inputs:
+            axis: ?
+            distance: ?
+            feedrate: int number of millimeters per minute to move the spindle along each axis
+        """
+        #### FIXME make work with ABC axes
+        #### TODO validate args
+        assert axis in "XYZ", f"Invalid axis: {axis}, must be 'X', 'Y', or 'Z'"
+        assert isinstance(distance, float), f"Invalid distance: {distance}, must be a float value"
+        jogCmd = f"$J=G21 G91 {axis}{distance} F{feedrate}"
+        self._sendCmd(jogCmd)
+        print("JOG: ", jogCmd)  #### TMP TMP TMP
+
     def jogIncremental(self, x=None, y=None, z=None, feedrate=DEF_FEEDRATE):
         """Send realtime command to jog the spindle by given increment(s).
 
