@@ -581,8 +581,6 @@ DOLLAR_COMMANDS = {
     'HELP': ""              # print help message -- no command character, just '$'
 }
 
-DOLLAR_VIEW_COMMANDS = [s for s in DOLLAR_COMMANDS.keys() if s.startswith('VIEW')]
-
 
 def alarmDescription(msg, full=True):
     """Take a raw Alarm message from the controller and return its description.
