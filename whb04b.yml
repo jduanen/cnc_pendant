@@ -1,8 +1,37 @@
 # example macros definitions
+#
+# Example Grbl Commands
+#   Run Home Cycle: $H
+#   Unlock (without homing): $X
+#   Jog: $J=G21 G91 X10.0 Y-1.5 F500
+#   Run Probe Cycle: G90Z-?? G91 G38.2 Z-5 F10 G4 P1
+#   Set Z Position (distance from part zero to tool tip, after probe): G92 Z???
+#   Set mm mode and incremental mode: G21 G91
+#   Turn Flood Coolant On: M8
+#   Turn Flood Coolant Off: M9
+#   Turn Spindle On: M3
+#   Turn Spindle Off: M5
+#   Query Current State: ?
+#   Cycle Start/Resume: ~
+#   Feed Hold: !
+#   Set Feed Rate: F500
+#   Return to Home (Machine zero): G28
+#   Set Home Position: G28.1
+#   Select Machine Coordinate System: G53
+#   Select Work Coordinate System 0: G54
+# Example Magic Commands
+#   Reset Grbl (retain machine position): RESET
+#   Print Settings: VIEW_SETTINGS
+#   Print Parameters: VIEW_PARAMETERS
+#   Print G-Code Parser State: VIEW_PARSER
+#   Print Grbl Build Info: VIEW_BUILD
+#   Print Application State: DUMP_STATE
+#   Print Startup Commands: VIEW_STARTUPS
+#
 ---
 macro-1:
   description: Set millimeter and incremental movement modes
-  commands: G21 G91 M3
+  commands: G21 G91
 macro-2:
   description: Turn on flood coolant
   commands: M8
@@ -28,13 +57,12 @@ macro-7:
   commands:
   after: DUMP_STATE
 macro-8:
-  description: Show startup lines
-  before: VIEW_STARTUPS
-  commands:
+  description: Run probe cycle
+  commands: G38.2Z-5F10
 macro-9:
   description: Run home cycle
   commands: $H
 macro-10:
-  description: Setup startup line #0
-  commands: $N0=G21 G91 M3
+  description: Setup startup line 0 and  startup lines
+  commands: $N0=G21 G91
   after: VIEW_STARTUPS
