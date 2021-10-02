@@ -181,7 +181,6 @@ class Processor():
             results += self.magicCommands[cmd]() + '\n'
         return results
 
-    #### TODO add more magic commands
     def _initMagic(self):
         def dumpState():
             state = f"Running threads: {threading.enumerate()}\n"
@@ -189,18 +188,28 @@ class Processor():
             #### TODO add more state info
             return state
 
-        def dollarViewClosure(cmdName):
+        def commandClosure(cmdType, cmdName):
             def closure():
-                return self.controller.dollarView(cmdName)
+                if cmdType == "dollar":
+                    cmd = self.controller.dollarCommand(cmdName)
+                elif cmdType == "realtime":
+                    cmd = self.controller.realtimeCommand(cmdName)
+                return cmd
             return closure
 
         return {
-            'VIEW_SETTINGS': dollarViewClosure('VIEW_SETTINGS'),
-            'VIEW_PARAMETERS': dollarViewClosure('VIEW_PARAMETERS'),
-            'VIEW_PARSER': dollarViewClosure('VIEW_PARSER'),
-            'VIEW_BUILD': dollarViewClosure('VIEW_BUILD'),
-            'VIEW_STARTUPS': dollarViewClosure('VIEW_STARTUPS'),
-            'HELP': self.controller.dollarView, #### FIXME
+            'VIEW_SETTINGS': commandClosure("dollar", "VIEW_SETTINGS"),
+            'VIEW_PARAMETERS': commandClosure("dollar", "VIEW_PARAMETERS"),
+            'VIEW_PARSER': commandClosure("dollar", "VIEW_PARSER"),
+            'VIEW_BUILD': commandClosure("dollar", "VIEW_BUILD"),
+            'VIEW_STARTUPS': commandClosure("dollar", "VIEW_STARTUPS"),
+            'HELP': commandClosure("dollar", "HELP"),
+            'KILL_ALARM': commandClosure("dollar", "KILL_ALARM"),
+            'CYCLE_START': commandClosure("realtime", "CYCLE_START"),
+            'FEED_HOLD': commandClosure("realtime", "FEED_HOLD"),
+            'STATUS': commandClosure("realtime", "STATUS"),
+            'RESET': commandClosure("realtime", "RESET"),
+            'JOG_CANCEL': commandClosure("realtime", "JOG_CANCEL"),
             'DUMP_STATE': dumpState
         }
 
