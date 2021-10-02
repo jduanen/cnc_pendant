@@ -294,12 +294,11 @@ class Controller(Receiver):
         assert cmdName in REALTIME_COMMANDS.keys(), f"Command '{cmdName}' not a valid realtime command"
         self._sendCmd(chr(REALTIME_COMMANDS[cmdName]))
 
-    def dollarView(self, cmdName):
+    def dollarCommand(self, cmdName):
         """Send a realtime "dollar" command to the controller.
 
          Realtime commands do not occupy buffer space in the controller.
         """
-        assert cmdName in DOLLAR_VIEW_COMMANDS, f"Command '{cmdName}' not a valid dollar command"
         self._sendCmd(f"${DOLLAR_COMMANDS[cmdName]}")
         return self._getAllInputs()
 
@@ -404,7 +403,7 @@ if __name__ == '__main__':
  
     for dCmd in DOLLAR_VIEW_COMMANDS:
         print(f"{dCmd}:")
-        responses = ctlr.dollarView(dCmd)
+        responses = ctlr.dollarCommand(dCmd)
         if not responses:
             logging.error(f"No response from {dCmd} dollar command")
         else:
