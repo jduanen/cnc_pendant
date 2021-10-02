@@ -80,17 +80,26 @@ def run(options):
     host = Host()
     proc = Processor(pend, ctlr, host, macros)
     if proc:
-        while proc.isAlive():
-            #### FIXME do something here
-            print("running...")
-            time.sleep(30)
+        if options.magicCommands:
+            magicCmdNames = proc.magicCommandNames()
+            if options.verbose:
+                print("Magic Commands:")
+                json.dump(magicCmdNames, sys.stdout, indent=4, sort_keys=True)
+                print("")
+            else:
+                print(f"Magic Commands: {magicCmdNames}")
+        else:
+            while proc.isAlive():
+                #### FIXME do something here
+                print("running...")
+                time.sleep(30)
     stop()
     sys.exit(0)
 
 
 def getOpts():
     usage = f"Usage: {sys.argv[0]} [-v] [-L <logLevel>] [-l <logFile>] " + \
-      "[-m <macroPath>]"
+      "[-m <macroPath>] [-M]"
     ap = argparse.ArgumentParser()
     ap.add_argument(
         "-L", "--logLevel", action="store", type=str,
@@ -100,6 +109,9 @@ def getOpts():
     ap.add_argument(
         "-l", "--logFile", action="store", type=str,
         help="Path to location of logfile (create it if it doesn't exist)")
+    ap.add_argument(
+        "-M", "--magicCommands", action="store_true", default=False,
+        help="Print names of magic commands and exit")
     ap.add_argument(
         "-m", "--macroPath", action="store", type=str, default=DEFAULTS['macroPath'],
         help="Path to YAML file containing macro key definitions")
@@ -117,6 +129,7 @@ def getOpts():
         logging.basicConfig(level=opts.logLevel,
                             format='%(asctime)s %(levelname)-8s %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
+
     if not os.path.exists(opts.macroPath):
         logging.error(f"Macro key definitions file not found: {opts.macroPath}")
         sys.exit(1)
