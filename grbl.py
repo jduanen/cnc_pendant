@@ -263,7 +263,7 @@ from collections import namedtuple
 from parse import parse
 
 
-GRBL_VERSION = "1.1hJDN-0"
+GRBL_VERSION = "1.1hJDN_0.0.1"
 
 GRBL_PROMPT = f"Grbl {GRBL_VERSION} ['$' for help]"
 
