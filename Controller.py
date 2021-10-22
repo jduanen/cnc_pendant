@@ -61,7 +61,7 @@ from parse import parse
 import serial
 
 from grbl import (RX_BUFFER_SIZE, REALTIME_COMMANDS, DOLLAR_COMMANDS,
-                  DOLLAR_VIEW_COMMANDS, alarmDescription, errorDescription)
+                  alarmDescription, errorDescription)
 from Receiver import Receiver
 
 
@@ -401,7 +401,7 @@ if __name__ == '__main__':
     print(f"Startup Message #2: {ctlr.getInput()['data']}")
     print("")
  
-    for dCmd in DOLLAR_VIEW_COMMANDS:
+    for dCmd in DOLLAR_COMMANDS:
         print(f"{dCmd}:")
         responses = ctlr.dollarCommand(dCmd)
         if not responses:
