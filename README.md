@@ -3,6 +3,8 @@ Connect an XHC WHB04B pendant to a GRBL-based CNC controller
 
 ![XHC WHB04B Pendant](https://github.com/jduanen/cnc_pendant/tree/main/assets/Xhc-Mach3-Wireless-Handwheel-Manual-Pulse-Generator-Whb04b.webp?raw=true)
 
+![XHC WHB04B Pendant](pendant.png)
+
 **TODO**
 * Clean this up and add some text about how all this is supposed to work
 * Document the code
