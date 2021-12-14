@@ -1,5 +1,5 @@
 # cnc_pendant
-Connect an XHC WHB04B pendant to a GRBL-based CNC controller
+Connect an XHC WHB04B pendant to a GRBL-based CNC controller using a RaspberryPi Zero
 
 ![XHC WHB04B Pendant](https://github.com/jduanen/cnc_pendant/tree/main/assets/Xhc-Mach3-Wireless-Handwheel-Manual-Pulse-Generator-Whb04b.webp?raw=true)
 
